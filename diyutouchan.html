@@ -1,0 +1,726 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>ROI 净实收核算 (V11.0)</title>
+    <!-- 引入 SheetJS 用于解析 Excel -->
+    <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+    <!-- 引入 ECharts 用于图表展示 -->
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+    <style>
+        /* --- 基础重置 --- */
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Arial, sans-serif; background: #f5f7fa; margin: 0; padding: 12px; color: #333; }
+        
+        .container { max-width: 900px; margin: 0 auto; }
+        .card { background: #fff; border-radius: 12px; padding: 16px; margin-bottom: 12px; box-shadow: 0 4px 16px rgba(0,0,0,0.04); }
+        
+        /* --- 头部 --- */
+        .header { text-align: center; padding: 20px 10px; }
+        .header h2 { margin: 0 0 6px 0; color: #1890ff; font-size: 20px; font-weight: 800; letter-spacing: -0.5px; }
+        .header p { margin: 0; color: #666; font-size: 12px; opacity: 0.8; }
+        .tag-version { background: #e6f7ff; color: #1890ff; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: bold; vertical-align: top; margin-left: 4px; }
+
+        /* --- 上传区域 --- */
+        .upload-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 20px; }
+        .upload-box { 
+            border: 2px dashed #e0e0e0; border-radius: 10px; padding: 15px 5px; text-align: center; 
+            background: #fafafa; position: relative; transition: all 0.2s; cursor: pointer; min-height: 120px;
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+        }
+        .upload-box:active { transform: scale(0.98); background: #f0f0f0; }
+        .upload-box.done { border-color: #52c41a; background: #f6ffed; }
+        .upload-box.loading { border-color: #1890ff; background: #e6f7ff; cursor: wait; }
+        
+        .u-icon { font-size: 28px; margin-bottom: 6px; }
+        .u-title { font-weight: bold; font-size: 14px; color: #333; margin-bottom: 4px; }
+        .u-desc { font-size: 11px; color: #999; line-height: 1.4; }
+        .u-tag { font-size: 10px; background: #eee; padding: 1px 5px; border-radius: 4px; color: #666; margin-left: 4px; vertical-align: middle; }
+        .u-highlight { color: #1890ff; font-weight: bold; }
+        .file-input { position: absolute; top:0; left:0; width:100%; height:100%; opacity:0; cursor: pointer; }
+
+        /* --- 按钮 --- */
+        .action-area { text-align: center; margin-top: 20px; display: flex; flex-direction: column; align-items: center; gap: 12px; }
+        .btn-analyze {
+            background: #e0e0e0; color: #999; border: none; padding: 12px 40px; 
+            border-radius: 50px; font-size: 15px; font-weight: bold; cursor: not-allowed;
+            box-shadow: none; transition: 0.3s; width: 100%; max-width: 300px;
+        }
+        .btn-analyze.active {
+            background: linear-gradient(135deg, #1890ff, #096dd9); color: white;
+            cursor: pointer; box-shadow: 0 8px 24px rgba(24, 144, 255, 0.3);
+        }
+        .btn-analyze.active:active { transform: scale(0.98); }
+
+        /* 新增：重置按钮样式 */
+        .btn-reset {
+            background: transparent; border: 1px solid #d9d9d9; color: #666;
+            padding: 8px 24px; border-radius: 50px; font-size: 13px;
+            cursor: pointer; transition: 0.3s; display: none; /* 默认隐藏 */
+        }
+        .btn-reset:hover { border-color: #ff4d4f; color: #ff4d4f; background: #fff1f0; }
+
+        /* --- KPI 指标卡 --- */
+        .kpi-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; text-align: center; margin-bottom: 8px; }
+        .kpi-item { background: #f8f9fa; padding: 10px 5px; border-radius: 8px; }
+        .kpi-val { font-size: 16px; font-weight: 800; color: #333; display: block; margin-bottom: 4px; font-family: 'DIN Alternate', sans-serif; }
+        .kpi-lbl { font-size: 11px; color: #888; white-space: nowrap; }
+        .text-red { color: #ff4d4f; }
+        .text-blue { color: #1890ff; }
+        .text-green { color: #52c41a; }
+        .text-orange { color: #fa8c16; }
+
+        /* --- 列表部分 --- */
+        .list-header { display: flex; justify-content: space-between; padding-bottom: 10px; border-bottom: 2px solid #f0f0f0; color: #999; font-size: 12px; font-weight: bold; }
+        
+        /* 省份行 */
+        .row { border-bottom: 1px solid #f5f5f5; padding: 14px 0; cursor: pointer; transition: background 0.1s; }
+        .row:hover { background: #fafafa; }
+        
+        .r-main { display: flex; align-items: flex-start; justify-content: space-between; }
+        
+        /* 左侧 */
+        .r-left { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; padding-top: 4px; }
+        .r-idx { width: 20px; height: 20px; background: #eee; color: #999; text-align: center; line-height: 20px; border-radius: 6px; font-size: 11px; font-weight: 700; flex-shrink: 0; }
+        .r-idx.top { background: #fff1f0; color: #ff4d4f; }
+        .r-name { font-size: 15px; font-weight: 700; color: #333; white-space: nowrap; }
+        .r-buyer-tag { font-size: 11px; color: #888; background: #f5f5f5; padding: 2px 6px; border-radius: 10px; display: flex; align-items: center; gap: 4px; white-space: nowrap; }
+        
+        /* 右侧 (多行数据) */
+        .r-right { text-align: right; flex-shrink: 0; margin-left: 10px; }
+        .r-val-main { font-family: 'DIN Alternate', sans-serif; font-weight: 700; font-size: 18px; line-height: 1.2; }
+        .r-val-sub { font-size: 11px; color: #666; margin-top: 2px; display: block; }
+        .r-val-ter { font-size: 10px; color: #999; margin-top: 1px; display: block; }
+        
+        /* --- 城市明细盒子 --- */
+        .detail-box { display: none; background: #fcfcfc; padding: 8px; border: 1px solid #eee; margin-top: 10px; border-radius: 8px; overflow-x: auto; }
+        .row.open .detail-box { display: block; animation: slideDown 0.2s; }
+        
+        /* --- 城市行 Grid 布局 (动态列) --- */
+        .grid-row { 
+            display: grid; 
+            gap: 2px; 
+            align-items: center; 
+            padding: 8px 0; 
+            border-bottom: 1px dashed #f0f0f0; 
+            font-size: 11px; 
+            color: #666; 
+        }
+        
+        /* 表头样式 */
+        .grid-row.head { 
+            font-weight: bold; 
+            color: #999; 
+            font-size: 10px; 
+            border-bottom: 2px solid #eee; 
+            padding-bottom: 6px; 
+            margin-bottom: 4px; 
+            background: #f9f9f9;
+            border-radius: 4px 4px 0 0;
+        }
+        
+        /* 单元格通用样式 */
+        .cell { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+        .cell-left { text-align: left; }
+        .cell-center { text-align: center; }
+        .cell-right { text-align: right; }
+        
+        /* 特定列样式 */
+        .c-name { font-weight: 500; color: #333; }
+        .c-count { font-family: 'DIN Alternate', monospace; background: #f0f0f0; border-radius: 4px; color: #666; font-size: 10px; padding: 1px 0; }
+        .c-num { font-family: 'DIN Alternate', monospace; }
+        .c-bold { font-weight: bold; color: #333; }
+        
+        /* 进度条 */
+        .bar-wrap { height: 6px; background: #f0f0f0; border-radius: 3px; overflow: hidden; display: flex; margin-top: 8px; }
+        
+        /* 颜色类 */
+        .col-red { color: #ff4d4f; }
+        .col-green { color: #52c41a; }
+        .col-gray { color: #ccc; }
+        .col-orange { color: #fa8c16; }
+
+        .spinner { width: 20px; height: 20px; border: 3px solid rgba(24,144,255,0.2); border-top-color: #1890ff; border-radius: 50%; animation: spin 0.8s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        @keyframes slideDown { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: translateY(0); } }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="card header">
+        <h2>💰 ROI 净实收核算 <span class="tag-version">V11.0</span></h2>
+        <p>实收 = 卖家实收 - 退款金额 | 剔除虚高产出</p>
+        
+        <div class="upload-grid">
+            <div class="upload-box" id="box-order">
+                <div id="icon-order" class="u-icon">📦</div>
+                <div class="u-title" id="txt-order">订单报表</div>
+                <div class="u-desc" id="desc-order">提取 <span class="u-highlight">实收 & 退款</span></div>
+                <input type="file" id="fileOrder" class="file-input" accept=".xlsx, .xls, .csv">
+            </div>
+            <div class="upload-box" id="box-ad">
+                <div id="icon-ad" class="u-icon">📢</div>
+                <div class="u-title" id="txt-ad">推广报表<span class="u-tag">可选</span></div>
+                <div class="u-desc" id="desc-ad">如有推广数据<br>自动计算 ROI</div>
+                <input type="file" id="fileAd" class="file-input" accept=".xlsx, .xls, .csv">
+            </div>
+        </div>
+
+        <div class="action-area">
+            <button id="btn-analyze" class="btn-analyze" disabled>请至少上传订单表</button>
+            <button id="btn-reset" class="btn-reset">🗑️ 清空重置</button>
+        </div>
+        <p id="status-msg" style="text-align:center;color:#999;font-size:12px;margin-top:10px;height:20px;"></p>
+    </div>
+
+    <div id="result-area" style="display: none;">
+        <!-- KPI 看板 -->
+        <div class="card">
+            <div class="kpi-row">
+                <div class="kpi-item">
+                    <span class="kpi-val text-blue" id="k-amt">0</span>
+                    <span class="kpi-lbl">净实收总额</span>
+                </div>
+                <div class="kpi-item">
+                    <span class="kpi-val text-red" id="k-cost">0</span>
+                    <span class="kpi-lbl" id="lbl-cost">退款总额</span>
+                </div>
+                <div class="kpi-item">
+                    <span class="kpi-val text-green" id="k-roi">0</span>
+                    <span class="kpi-lbl" id="lbl-roi">退款金额率</span>
+                </div>
+            </div>
+            <div class="kpi-row">
+                <div class="kpi-item">
+                    <span class="kpi-val" id="k-orders">0</span>
+                    <span class="kpi-lbl">买家数(去重)</span>
+                </div>
+                <!-- 占位，保持布局整齐 -->
+                <div class="kpi-item" style="background:transparent;"></div>
+                <div class="kpi-item" style="background:transparent;"></div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div id="chart-box" style="height:300px;width:100%"></div>
+        </div>
+
+        <div class="card">
+            <div class="list-header">
+                <span id="list-title">区域排行</span>
+                <span id="list-cols">数据概览</span>
+            </div>
+            <div id="list-box"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const $ = id => document.getElementById(id);
+    const fmtMoney = n => '¥' + Math.round(n).toLocaleString();
+    const cleanStr = str => String(str || '').trim().replace(/[\ufeff\s"]/g, '');
+    
+    const normalizeAddr = name => {
+        if (!name) return '';
+        let str = String(name).trim();
+        if (str === '-' || str === '未知') return '';
+        ['省', '维吾尔自治区', '壮族自治区', '回族自治区', '自治区', '特别行政区'].forEach(s => {
+            if (str.endsWith(s) && str.length > 2) str = str.replace(s, '');
+        });
+        if(str.endsWith('市') && str.length <= 4) str = str.replace('市', '');
+        return str;
+    };
+
+    const getCleanCityName = (city, province) => {
+        if (!city || !province) return city;
+        if (city.startsWith(province) && city.length > province.length) return city.replace(province, '');
+        const provWithSuffix = province + '省';
+        if (city.startsWith(provWithSuffix)) return city.replace(provWithSuffix, '');
+        return city;
+    };
+
+    let orderData = null;
+    let adData = null;
+    let myChart = null; // Chart instance
+
+    $('fileOrder').addEventListener('change', e => startProcess(e.target, 'order'));
+    $('fileAd').addEventListener('change', e => startProcess(e.target, 'ad'));
+    $('btn-analyze').addEventListener('click', mergeAndAnalyze);
+    $('btn-reset').addEventListener('click', resetAll);
+
+    function startProcess(input, type) {
+        const file = input.files[0];
+        if(!file) return;
+        const box = $(type === 'order' ? 'box-order' : 'box-ad');
+        const icon = $(type === 'order' ? 'icon-order' : 'icon-ad');
+        box.className = 'upload-box loading';
+        icon.innerHTML = '<div class="spinner"></div>';
+        $('status-msg').innerText = `正在解析: ${file.name}`;
+        $('status-msg').style.color = '#999';
+        
+        setTimeout(() => {
+            if (file.name.endsWith('.csv')) parseCSV(file, type);
+            else parseExcel(file, type);
+        }, 50);
+    }
+
+    function parseCSV(file, type) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const buffer = e.target.result;
+            let text = '';
+            const decoderUTF = new TextDecoder('utf-8');
+            const strUTF = decoderUTF.decode(buffer);
+            const keywords = type === 'order' ? ['订单', '金额', '实收'] : ['花费', '省', '地域', '消耗'];
+            const isUTFValid = keywords.some(k => strUTF.includes(k));
+            if (isUTFValid) text = strUTF;
+            else {
+                const decoderGBK = new TextDecoder('gbk');
+                text = decoderGBK.decode(buffer);
+            }
+            const rows = csvToJson(text);
+            processData(rows, type);
+        };
+        reader.readAsArrayBuffer(file);
+    }
+
+    function csvToJson(text) {
+        const lines = text.split(/\r\n|\n/);
+        const result = [];
+        if (lines.length < 2) return [];
+        const headers = lines[0].split(',').map(h => cleanStr(h));
+        for (let i = 1; i < lines.length; i++) {
+            if (!lines[i].trim()) continue;
+            const row = lines[i].split(','); 
+            if (row.length < headers.length) continue;
+            const obj = {};
+            headers.forEach((h, idx) => { obj[h] = row[idx] ? cleanStr(row[idx]) : ''; });
+            result.push(obj);
+        }
+        return result;
+    }
+
+    function parseExcel(file, type) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const data = new Uint8Array(e.target.result);
+            const workbook = XLSX.read(data, { type: 'array' });
+            const sheet = workbook.Sheets[workbook.SheetNames[0]];
+            const json = XLSX.utils.sheet_to_json(sheet, { defval: "" });
+            processData(json, type);
+        };
+        reader.readAsArrayBuffer(file);
+    }
+
+    function processData(data, type) {
+        try {
+            const keys = Object.keys(data[0]);
+            
+            if (type === 'order') {
+                const cProv = keys.find(k => k.includes('省'));
+                const cCity = keys.find(k => k.includes('市') || k.includes('城'));
+                
+                let cAmt = keys.find(k => cleanStr(k) === '卖家实收');
+                if (!cAmt) cAmt = keys.find(k => k.includes('实收') || k.includes('金额'));
+                
+                let cOid = keys.find(k => k.includes('原始线上订单号'));
+                if (!cOid) cOid = keys.find(k => k.includes('线上订单号') || k.includes('订单号'));
+
+                let cRef = keys.find(k => k.includes('退款'));
+
+                if (!cAmt) throw new Error("未找到【卖家实收】列");
+
+                let totalNetAmt = 0; // 净实收
+                let totalRefund = 0;
+                let validOrders = new Set();
+                const map = {};
+
+                data.forEach(row => {
+                    const received = parseFloat(String(row[cAmt]).replace(/,/g, ''));
+                    if (isNaN(received)) return;
+
+                    let refund = 0;
+                    if(cRef) {
+                        const r = parseFloat(String(row[cRef]).replace(/,/g, ''));
+                        if(!isNaN(r)) refund = r;
+                    }
+
+                    // 计算净实收: 卖家实收 - 退款
+                    const netAmt = received - refund;
+
+                    const prov = normalizeAddr(row[cProv]);
+                    const city = normalizeAddr(row[cCity]);
+                    const oid = row[cOid]; 
+
+                    if (!prov || prov === '未知') return;
+
+                    if (!map[prov]) map[prov] = { amt: 0, refund: 0, orders: new Set(), cities: {} };
+                    
+                    let rawCityName = row[cCity] ? String(row[cCity]).trim() : city;
+                    if (!map[prov].cities[city]) {
+                        map[prov].cities[city] = { amt: 0, refund: 0, orders: new Set(), rawName: rawCityName };
+                    }
+
+                    map[prov].amt += netAmt; // 存储净实收
+                    map[prov].refund += refund;
+                    map[prov].cities[city].amt += netAmt; // 存储净实收
+                    map[prov].cities[city].refund += refund;
+                    
+                    totalNetAmt += netAmt;
+                    totalRefund += refund;
+
+                    if (oid) {
+                        map[prov].orders.add(oid);
+                        map[prov].cities[city].orders.add(oid);
+                        validOrders.add(oid);
+                    }
+                });
+                
+                orderData = { total: totalNetAmt, totalRefund, count: validOrders.size, map };
+                updateStatus('box-order', 'icon-order', '📦', `净实收${fmtMoney(totalNetAmt)} | ${validOrders.size}人`);
+
+            } else {
+                // 推广报表逻辑不变
+                const cProv = keys.find(k => k.includes('省') || k.includes('地域'));
+                const cCity = keys.find(k => k.includes('市') || k.includes('城'));
+                const cCost = keys.find(k => k.includes('花费') || k.includes('消耗'));
+
+                if (!cCost) throw new Error("未找到【花费】列");
+
+                let total = 0;
+                const map = {};
+
+                data.forEach(row => {
+                    const cost = parseFloat(String(row[cCost]).replace(/,/g, ''));
+                    if (isNaN(cost)) return;
+
+                    const prov = normalizeAddr(row[cProv]);
+                    const city = normalizeAddr(row[cCity]);
+                    if (!prov || prov === '未知') return;
+
+                    if (!map[prov]) map[prov] = { cost: 0, cities: {} };
+                    if (!map[prov].cities[city]) map[prov].cities[city] = 0;
+
+                    map[prov].cost += cost;
+                    map[prov].cities[city] += cost;
+                    total += cost;
+                });
+                adData = { total, map };
+                updateStatus('box-ad', 'icon-ad', '📢', `花费${fmtMoney(total)}`);
+            }
+
+            $('status-msg').innerText = "";
+            checkReady();
+
+        } catch (err) {
+            console.error(err);
+            // alert("解析错误: " + err.message); // 替换alert以符合安全规范
+            const box = $(type === 'order' ? 'box-order' : 'box-ad');
+            box.className = 'upload-box'; 
+            $('status-msg').innerText = "❌ 解析失败: " + err.message;
+            $('status-msg').style.color = '#ff4d4f';
+        }
+    }
+
+    function updateStatus(boxId, iconId, icon, text) {
+        $(boxId).className = 'upload-box done';
+        $(iconId).innerHTML = icon;
+        $(boxId).querySelector('.u-title').innerHTML = text;
+        $(boxId).querySelector('.u-desc').innerText = "✅ 解析成功";
+    }
+
+    function checkReady() {
+        // 只要有数据，就显示重置按钮
+        if (orderData || adData) {
+            $('btn-reset').style.display = 'inline-block';
+        }
+
+        const btn = $('btn-analyze');
+        if (orderData) {
+            btn.disabled = false;
+            btn.classList.add('active');
+            btn.innerText = adData ? "🚀 开始全能分析" : "🚀 开始销售分析";
+        }
+    }
+
+    function resetAll() {
+        // 清空数据
+        orderData = null;
+        adData = null;
+        if (myChart) {
+            myChart.dispose();
+            myChart = null;
+        }
+
+        // 清空文件输入
+        $('fileOrder').value = '';
+        $('fileAd').value = '';
+
+        // 还原UI
+        resetBox('box-order', 'icon-order', '📦', '订单报表', '提取 <span class="u-highlight">实收 & 退款</span>');
+        resetBox('box-ad', 'icon-ad', '📢', '推广报表<span class="u-tag">可选</span>', '如有推广数据<br>自动计算 ROI');
+
+        // 还原按钮
+        const btn = $('btn-analyze');
+        btn.disabled = true;
+        btn.classList.remove('active');
+        btn.innerText = "请至少上传订单表";
+        btn.style.background = '#e0e0e0';
+
+        // 隐藏区域
+        $('btn-reset').style.display = 'none';
+        $('result-area').style.display = 'none';
+        $('status-msg').innerText = '';
+        $('list-box').innerHTML = '';
+    }
+
+    function resetBox(boxId, iconId, iconChar, titleHtml, descHtml) {
+        const box = $(boxId);
+        box.className = 'upload-box';
+        $(iconId).innerHTML = iconChar;
+        box.querySelector('.u-title').innerHTML = titleHtml;
+        box.querySelector('.u-desc').innerHTML = descHtml;
+    }
+
+    function mergeAndAnalyze() {
+        $('result-area').style.display = 'block';
+        $('btn-analyze').innerText = "🔄 分析完成";
+        $('btn-analyze').style.background = '#87d068';
+        $('btn-analyze').disabled = true;
+
+        // KPI Update
+        $('k-amt').innerText = fmtMoney(orderData.total);
+        $('k-orders').innerText = orderData.count.toLocaleString();
+        
+        if (adData) {
+            $('lbl-cost').innerText = "推广花费";
+            $('k-cost').innerText = fmtMoney(adData.total);
+            const globalRoi = adData.total > 0 ? (orderData.total / adData.total).toFixed(2) : '∞';
+            $('lbl-roi').innerText = "整体 ROI";
+            $('k-roi').innerText = globalRoi;
+            $('k-roi').className = 'kpi-val ' + getRoiColor(orderData.total / adData.total);
+            $('list-title').innerText = "区域 (按花费降序)";
+            $('list-cols').innerText = "ROI / 净实收 / 花费";
+        } else {
+            $('lbl-cost').innerText = "退款总额";
+            $('k-cost').innerText = fmtMoney(orderData.totalRefund);
+            // 销售总额(GMV-like) = 净实收 + 退款
+            const gmv = orderData.total + orderData.totalRefund;
+            const refRate = gmv > 0 ? (orderData.totalRefund / gmv * 100).toFixed(2) : 0;
+            
+            $('lbl-roi').innerText = "退款金额率";
+            $('k-roi').innerText = refRate + '%';
+            $('k-roi').className = 'kpi-val ' + (refRate > 20 ? 'text-red' : (refRate > 10 ? 'text-orange' : 'text-green'));
+            $('list-title').innerText = "区域 (按净实收降序)";
+            $('list-cols').innerText = "退款 / 占比 / 净实收";
+        }
+
+        // Data Merge
+        const allProvs = new Set([...Object.keys(orderData.map), ...(adData ? Object.keys(adData.map) : [])]);
+        const list = [];
+
+        allProvs.forEach(p => {
+            const o = orderData.map[p] || { amt: 0, refund: 0, orders: new Set(), cities: {} };
+            const a = (adData && adData.map[p]) ? adData.map[p] : { cost: 0, cities: {} };
+            
+            const allCities = new Set([...Object.keys(o.cities), ...Object.keys(a.cities)]);
+            const cityList = [];
+            
+            allCities.forEach(c => {
+                const cData = o.cities[c] || { amt: 0, refund: 0, orders: new Set(), rawName: c };
+                const cAmt = cData.amt; // 净实收
+                const cRefund = cData.refund;
+                const cCost = a.cities[c] || 0;
+                const cCount = cData.orders.size;
+
+                if (cAmt === 0 && cCost === 0 && cRefund === 0) return;
+                
+                // ROI = 净实收 / 花费
+                const roi = cCost > 0 ? cAmt / cCost : (cAmt > 0 ? 999 : 0);
+                
+                // 退款率 = 退款 / (净实收 + 退款)
+                const cityGmv = cAmt + cRefund;
+                const rate = cityGmv > 0 ? (cRefund / cityGmv * 100) : 0;
+                
+                let rawCity = cData.rawName || c;
+                let displayName = getCleanCityName(rawCity, p);
+                if (displayName === rawCity) displayName = getCleanCityName(c, p);
+
+                cityList.push({ name: displayName, amt: cAmt, refund: cRefund, rate: rate, cost: cCost, count: cCount, roi: roi });
+            });
+            
+            if (adData) cityList.sort((x, y) => y.cost - x.cost);
+            else cityList.sort((x, y) => y.amt - x.amt);
+
+            const pRoi = a.cost > 0 ? o.amt / a.cost : (o.amt > 0 ? 999 : 0);
+            const provGmv = o.amt + o.refund;
+            const pRate = provGmv > 0 ? (o.refund / provGmv * 100) : 0;
+            
+            list.push({ 
+                name: p, 
+                amt: o.amt, 
+                refund: o.refund,
+                rate: pRate,
+                cost: a.cost, 
+                count: o.orders.size, 
+                roi: pRoi, 
+                cities: cityList 
+            });
+        });
+
+        if (adData) list.sort((a, b) => b.cost - a.cost);
+        else list.sort((a, b) => b.amt - a.amt);
+
+        renderList(list, !!adData);
+        renderChart(list, !!adData);
+        
+        setTimeout(() => $('result-area').scrollIntoView({behavior: "smooth"}), 100);
+    }
+
+    function renderList(list, showRoi) {
+        const box = $('list-box');
+        box.innerHTML = '';
+        list.forEach((item, idx) => {
+            if (item.amt === 0 && item.cost === 0 && item.refund === 0) return;
+            
+            const rankClass = idx < 3 ? 'r-idx top' : 'r-idx';
+            let rightInfo = '';
+            let barHtml = '';
+            
+            // --- Header & Layout Config ---
+            let headerCells = '';
+            let gridStyle = ''; 
+
+            if (showRoi) {
+                // ROI Mode (7 Cols)
+                gridStyle = 'grid-template-columns: 60px 40px 40px 50px 1fr 1fr 40px;';
+                headerCells = `
+                    <span class="cell-left">城市</span>
+                    <span class="cell-center">买家</span>
+                    <span class="cell-right">退率</span>
+                    <span class="cell-right">退款</span>
+                    <span class="cell-right">净实收</span>
+                    <span class="cell-right">花费</span>
+                    <span class="cell-right">ROI</span>
+                `;
+                
+                const displayRoi = item.cost > 0 ? item.roi.toFixed(2) : '∞';
+                const roiClass = item.cost > 0 ? getRoiColor(item.roi) : 'col-gray';
+                rightInfo = `
+                    <div class="r-val-main ${roiClass}" style="font-size:20px">${displayRoi}</div>
+                    <div class="r-val-sub">净收${fmtMoney(item.amt)} / 花费${fmtMoney(item.cost)}</div>
+                    <div class="r-val-ter">退款${fmtMoney(item.refund)} (${item.rate.toFixed(1)}%)</div>
+                `;
+                
+                const maxVal = Math.max(item.amt, item.cost);
+                const wAmt = maxVal ? (item.amt/maxVal*100) : 0;
+                const wCost = maxVal ? (item.cost/maxVal*100) : 0;
+                barHtml = `<div class="bar-wrap"><div style="width:${wAmt}%;background:#1890ff"></div></div>
+                           <div class="bar-wrap" style="margin-top:2px;height:4px"><div style="width:${wCost}%;background:#ff4d4f"></div></div>`;
+
+            } else {
+                // Sales Mode (5 Cols)
+                gridStyle = 'grid-template-columns: 80px 50px 60px 80px 1fr;';
+                headerCells = `
+                    <span class="cell-left">城市</span>
+                    <span class="cell-center">买家</span>
+                    <span class="cell-right">退款率</span>
+                    <span class="cell-right">退款额</span>
+                    <span class="cell-right">净实收</span>
+                `;
+                
+                const rateColor = item.rate > 10 ? 'text-red' : 'col-gray';
+                rightInfo = `
+                    <div class="r-val-main">${fmtMoney(item.amt)}</div>
+                    <div class="r-val-sub">退款 ${fmtMoney(item.refund)}</div>
+                    <div class="r-val-ter ${rateColor}">退款率 ${item.rate.toFixed(1)}%</div>
+                `;
+                barHtml = `<div class="bar-wrap"><div style="width:${Math.min(item.rate, 100)}%;background:#ff4d4f"></div></div>`;
+            }
+
+            const cityHtml = item.cities.map(c => {
+                let cCols = '';
+                const cRateColor = c.rate > 10 ? 'col-red' : 'col-gray';
+                
+                if (showRoi) {
+                    const cDispRoi = c.cost > 0 ? c.roi.toFixed(2) : '∞';
+                    const cColor = c.cost > 0 ? getRoiColor(c.roi) : 'col-gray';
+                    cCols = `<div class="cell-right ${cRateColor}">${c.rate.toFixed(0)}%</div>
+                             <div class="cell-right c-num c-gray">${Math.round(c.refund)}</div>
+                             <div class="cell-right c-num c-bold">${Math.round(c.amt)}</div>
+                             <div class="cell-right c-num col-red">${Math.round(c.cost)}</div>
+                             <div class="cell-right c-bold" style="color:${cColor}">${cDispRoi}</div>`;
+                } else {
+                    cCols = `<div class="cell-right c-bold" style="color:${cRateColor}">${c.rate.toFixed(1)}%</div>
+                             <div class="cell-right c-num col-red">${Math.round(c.refund)}</div>
+                             <div class="cell-right c-num c-bold">${Math.round(c.amt)}</div>`;
+                }
+
+                return `
+                    <div class="grid-row" style="${gridStyle}">
+                        <div class="c-name cell-left">${c.name}</div>
+                        <div class="c-count cell-center">${c.count}</div>
+                        ${cCols}
+                    </div>
+                `;
+            }).join('');
+
+            const div = document.createElement('div');
+            div.innerHTML = `
+                <div class="row" onclick="this.classList.toggle('open')">
+                    <div class="r-main">
+                        <div class="r-left">
+                            <div class="${rankClass}">${idx + 1}</div>
+                            <div class="r-name">${item.name}</div>
+                            <div class="r-buyer-tag">👤 ${item.count}</div>
+                        </div>
+                        <div class="r-right">${rightInfo}</div>
+                    </div>
+                    ${barHtml}
+                    <div class="detail-box">
+                        <div class="grid-row head" style="${gridStyle}">${headerCells}</div>
+                        ${cityHtml}
+                    </div>
+                </div>
+            `;
+            box.appendChild(div);
+        });
+    }
+
+    function renderChart(list, showRoi) {
+        const top10 = list.slice(0, 10);
+        myChart = echarts.init($('chart-box'));
+        let series = [];
+        if (showRoi) {
+            series = [
+                { name: '花费', type: 'bar', data: top10.map(i => i.cost), itemStyle:{color:'#ff4d4f', borderRadius:[4,4,0,0]} },
+                { name: '净产出', type: 'bar', data: top10.map(i => i.amt), itemStyle:{color:'#1890ff', borderRadius:[4,4,0,0]} }
+            ];
+        } else {
+            series = [
+                { name: '净实收', type: 'bar', data: top10.map(i => i.amt), itemStyle:{color:'#1890ff', borderRadius:[4,4,0,0]} },
+                { name: '退款额', type: 'line', data: top10.map(i => i.refund), itemStyle:{color:'#ff4d4f'} }
+            ];
+        }
+        myChart.setOption({
+            tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+            legend: { bottom: 0 },
+            grid: { left: '3%', right: '4%', bottom: '10%', containLabel: true },
+            xAxis: { type: 'category', data: top10.map(i => i.name) },
+            yAxis: { type: 'value' },
+            series: series
+        });
+        window.onresize = () => myChart && myChart.resize();
+    }
+
+    function getRoiColor(val) {
+        if(val < 1) return '#ff4d4f'; 
+        if(val < 3) return '#fa8c16'; 
+        return '#52c41a'; 
+    }
+</script>
+</body>
+</html>
+
