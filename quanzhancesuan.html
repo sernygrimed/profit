@@ -1,0 +1,1170 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>电商全站推广选品系统 V8.9 (多标签智能诊断版)</title>
+    
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    
+    <!-- Babel -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- SheetJS -->
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <style>
+        body { font-family: 'Inter', system-ui, -apple-system, sans-serif; background-color: #f8fafc; color: #334155; }
+        
+        /* 拖拽条 */
+        .resizer { position: absolute; right: -4px; top: 0; width: 8px; height: 100%; cursor: col-resize; z-index: 50; display: flex; justify-content: center; }
+        .resizer-line { width: 2px; height: 100%; background: transparent; transition: background 0.2s; }
+        .resizer:hover .resizer-line, .resizer.is-resizing .resizer-line { background: #2563eb; }
+        .select-none-global * { user-select: none !important; cursor: col-resize !important; }
+        
+        /* 文本行数限制 */
+        .line-clamp-6 { display: -webkit-box; -webkit-line-clamp: 6; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.4; max-height: calc(1.4em * 6); white-space: normal; word-break: break-all; }
+        
+        /* 动画 */
+        @keyframes fadeOut { 0% { opacity: 1; transform: translateY(0); } 100% { opacity: 0; transform: translateY(-10px); } }
+        @keyframes fadeIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+        .copy-feedback { animation: fadeOut 1.5s forwards; }
+        .animate-fade-in > div { animation: fadeIn 0.2s ease-out forwards; }
+        
+        /* 表头吸顶样式增强 */
+        thead th {
+            position: sticky;
+            top: 0;
+            z-index: 40; /* 确保表头在内容之上 */
+            background-color: #f1f5f9; /* 防止透明穿透 */
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            background-clip: padding-box;
+        }
+        
+        /* 通用滚动条美化 */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+        /* 隐藏数字输入框的箭头 */
+        input[type=number]::-webkit-inner-spin-button, 
+        input[type=number]::-webkit-outer-spin-button { 
+            -webkit-appearance: none; 
+            margin: 0; 
+        }
+        
+        /* 标签样式 */
+        .tag-badge {
+            display: inline-block;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 10px;
+            font-weight: 700;
+            border-width: 1px;
+            margin: 1px;
+            white-space: nowrap;
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useMemo, useEffect, useRef } = React;
+
+        // --- Icons ---
+        const Icon = ({ name, className }) => {
+            const icons = {
+                upload: <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>,
+                filter: <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>,
+                copy: <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>,
+                check: <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-emerald-600"><polyline points="20 6 9 17 4 12"/></svg>,
+                layers: <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m16.02 12 5.48 3.13a1 1 0 0 1 0 1.74L13 21.74a2 2 0 0 1-1.97 0L2.5 16.87a1 1 0 0 1 0-1.74L7.98 12"/><path d="M13 13.74a2 2 0 0 0 1.97 0L20.48 8.87a1 1 0 0 0 0-1.74L12 2.26a2 2 0 0 0-1.97 0L2.5 7.13a1 1 0 0 0 0 1.74l5.48 4.87"/></svg>,
+                brain: <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96.44 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24 2.5 2.5 0 0 1 1.98-3A2.5 2.5 0 0 1 9.5 2Z"/><path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96.44 2.5 2.5 0 0 0 2.96-3.08 3 3 0 0 0 .34-5.58 2.5 2.5 0 0 0-1.32-4.24 2.5 2.5 0 0 0-1.98-3A2.5 2.5 0 0 0 14.5 2Z"/></svg>,
+                fileCheck: <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><path d="m9 15 2 2 4-4"/></svg>,
+                trash: <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>,
+                search: <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>,
+                info: <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>,
+                x: <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 18 18"/></svg>,
+                merge: <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m8 6 4-4 4 4"/><path d="M12 2v10.3"/><path d="m8 18 4 4 4-4"/><path d="M12 22v-6.3"/></svg>,
+                users: <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>,
+                refresh: <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 16h5v5"/></svg>,
+                tag: <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2H2v10l9.29 9.29c.94.94 2.48.94 3.42 0l6.58-6.58c.94-.94.94-2.48 0-3.42L12 2Z"/><path d="M7 7h.01"/></svg>,
+                bug: <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m8 2 1.88 1.88"/><path d="M14.12 3.88 16 2"/><path d="M9 7.13v-1a3.003 3.003 0 1 1 6 0v1"/><path d="M12 20c-3.3 0-6-2.7-6-6v-3a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v3c0 3.3-2.7 6-6 6"/><path d="M12 20v-9"/><path d="M6.53 9C4.6 8.8 3 7.1 3 5"/><path d="M6 13H2"/><path d="M3 21c0-2.1 1.7-3.9 3.8-4"/><path d="M20.97 5c0 2.1-1.6 3.8-3.5 4"/><path d="M22 13h-4"/><path d="M17.2 17c2.1.1 3.8 1.9 3.8 4"/></svg>,
+                target: <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>,
+                trend: <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>,
+                leaf: <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10Z"/><path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"/></svg>,
+                eye: <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>,
+                link: <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>,
+                shield: <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>,
+                list: <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="8" x2="21" y1="6" y2="6"/><line x1="8" x2="21" y1="12" y2="12"/><line x1="8" x2="21" y1="18" y2="18"/><line x1="3" x2="3.01" y1="6" y2="6"/><line x1="3" x2="3.01" y1="12" y2="12"/><line x1="3" x2="3.01" y1="18" y2="18"/></svg>,
+                percent: <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="19" x2="5" y1="5" y2="19"/><circle cx="6.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></svg>,
+                arrowLeft: <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>,
+                chart: <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>,
+                alertTriangle: <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
+            };
+            return <span className={className}>{icons[name]}</span>;
+        };
+
+        // --- Helpers ---
+        const normalizeName = (name) => {
+            if (!name) return "";
+            return String(name).replace(/[^\u4e00-\u9fa5a-zA-Z0-9]/g, '').toLowerCase();
+        };
+        
+        const cleanNumber = (val) => {
+            if (val === undefined || val === null) return 0;
+            if (typeof val === 'number') return val;
+            const str = String(val).replace(/[¥,，\s"']/g, '');
+            const num = parseFloat(str);
+            return isNaN(num) ? 0 : num;
+        };
+        
+        // 格式化比率
+        const formatRawRate = (val) => {
+            if (val === undefined || val === null || val === '' || val === '-') return '-';
+            if (typeof val === 'string' && val.includes('%')) return val; 
+            if (typeof val === 'number') return (val * 100).toFixed(2) + '%';
+            const num = parseFloat(val);
+            if (!isNaN(num)) {
+                return (num * 100).toFixed(2) + '%';
+            }
+            return val;
+        };
+
+        const formatCurrency = (val) => new Intl.NumberFormat('zh-CN', { style: 'currency', currency: 'CNY' }).format(val);
+        const formatPercent = (val) => (val * 100).toFixed(2) + '%';
+        const copyToClipboard = (text) => { const textArea = document.createElement("textarea"); textArea.value = text; document.body.appendChild(textArea); textArea.select(); try { document.execCommand('copy'); return true; } catch (err) { return false; } finally { document.body.removeChild(textArea); } };
+        const safeAdd = (num1, num2) => (Math.round(num1 * 100) + Math.round(num2 * 100)) / 100;
+        const safeSub = (num1, num2) => (Math.round(num1 * 100) - Math.round(num2 * 100)) / 100;
+
+        // --- Tag Styling Helper ---
+        const getTagColor = (tag) => {
+            const map = {
+                "退货黑洞": "bg-gray-800 text-white border-gray-600",
+                "严重亏损": "bg-red-200 text-red-900 border-red-400",
+                "点击刺客": "bg-yellow-100 text-yellow-700 border-yellow-300",
+                "转化低迷": "bg-gray-200 text-gray-600 border-gray-400",
+                "基础销量不足": "bg-gray-100 text-gray-400 border-gray-300",
+                "强力推荐": "bg-red-100 text-red-700 border-red-300",
+                "捡钱模式": "bg-pink-100 text-pink-700 border-pink-300",
+                "自然爆款": "bg-emerald-100 text-emerald-700 border-emerald-300",
+                "高转化神车": "bg-purple-100 text-purple-700 border-purple-300",
+                "低退款优品": "bg-teal-100 text-teal-700 border-teal-300",
+                "潜力爆款": "bg-orange-100 text-orange-700 border-orange-300",
+                "需优化ROI": "bg-blue-100 text-blue-700 border-blue-300",
+                "暂不适合": "bg-gray-50 text-gray-500 border-gray-200"
+            };
+            return map[tag] || "bg-gray-100 text-gray-600 border-gray-200";
+        };
+
+        // --- Components ---
+        const ResizableTh = ({ width, minWidth = 60, onResize, children, onClick, className, title }) => {
+            const [isResizing, setIsResizing] = useState(false);
+            const handleMouseDown = (e) => {
+                e.preventDefault(); e.stopPropagation(); setIsResizing(true); document.body.classList.add('select-none-global');
+                const startX = e.pageX; const startWidth = width;
+                const onMouseMove = (moveEvent) => onResize(Math.max(minWidth, startWidth + (moveEvent.pageX - startX)));
+                const onMouseUp = () => { document.removeEventListener('mousemove', onMouseMove); document.removeEventListener('mouseup', onMouseUp); document.body.classList.remove('select-none-global'); setIsResizing(false); };
+                document.addEventListener('mousemove', onMouseMove); document.addEventListener('mouseup', onMouseUp);
+            };
+            return (
+                <th style={{ width: `${width}px`}} className={`relative p-3 select-none box-border group text-center border-b-2 border-gray-300 bg-gray-200 shadow-sm ${className}`} onClick={onClick} title={title}>
+                    <div className="flex items-center justify-center h-full w-full overflow-hidden text-gray-900 font-bold">{children}</div>
+                    <div className={`resizer ${isResizing ? 'is-resizing' : ''}`} onMouseDown={handleMouseDown} onClick={(e) => e.stopPropagation()}><div className="resizer-line"></div></div>
+                </th>
+            );
+        };
+
+        const CompactFilterGroup = ({ label, iconName, minVal, maxVal, setMin, setMax, colorClass, borderClass, bgClass, iconClass }) => (
+            <div className={`flex items-center gap-1.5 px-2 py-1.5 rounded-md border text-xs shadow-sm ${bgClass} ${borderClass}`}>
+                <span className={`font-bold flex items-center gap-1 ${colorClass}`}>
+                    <Icon name={iconName} className={`w-3.5 h-3.5 ${iconClass}`} />
+                    {label}:
+                </span>
+                <div className="flex items-center gap-1">
+                    <input type="number" className="w-14 px-1 py-0.5 border border-gray-300 rounded text-center font-bold text-gray-700 focus:ring-1 focus:ring-blue-500 outline-none bg-white/80 h-6" placeholder="Min" value={minVal} onChange={e => setMin(e.target.value)} />
+                    <span className="text-gray-400 font-bold">-</span>
+                    <input type="number" className="w-14 px-1 py-0.5 border border-gray-300 rounded text-center font-bold text-gray-700 focus:ring-1 focus:ring-blue-500 outline-none bg-white/80 h-6" placeholder="Max" value={maxVal} onChange={e => setMax(e.target.value)} />
+                </div>
+            </div>
+        );
+
+        // 新增：自定义字段筛选组件 (智能显示百分号)
+        const CustomFilterGroup = ({ selectedField, onFieldChange, minVal, maxVal, setMin, setMax, options }) => {
+             const isPercent = ['refundRate', 'cvr'].includes(selectedField);
+             return (
+                 <div className="flex items-center gap-1.5 px-2 py-1.5 rounded-md border text-xs shadow-sm bg-indigo-50 border-indigo-200">
+                    <select 
+                        value={selectedField} 
+                        onChange={(e) => onFieldChange(e.target.value)}
+                        className="bg-transparent font-bold text-indigo-700 outline-none cursor-pointer w-24"
+                    >
+                        <option value="" disabled>选择指标</option>
+                        {options.map(opt => (
+                            <option key={opt.key} value={opt.key}>{opt.label}</option>
+                        ))}
+                    </select>
+                    <div className="flex items-center gap-1">
+                        <input 
+                            type="number" 
+                            className="w-14 px-1 py-0.5 border border-indigo-300 rounded text-center font-bold text-gray-700 focus:ring-1 focus:ring-indigo-500 outline-none bg-white/80 h-6" 
+                            placeholder={isPercent ? "%" : "Min"} 
+                            value={minVal} 
+                            onChange={e => setMin(e.target.value)} 
+                        />
+                        <span className="text-indigo-300 font-bold">-</span>
+                        <input 
+                            type="number" 
+                            className="w-14 px-1 py-0.5 border border-indigo-300 rounded text-center font-bold text-gray-700 focus:ring-1 focus:ring-indigo-500 outline-none bg-white/80 h-6" 
+                            placeholder={isPercent ? "%" : "Max"} 
+                            value={maxVal} 
+                            onChange={e => setMax(e.target.value)} 
+                        />
+                    </div>
+                </div>
+            );
+        };
+
+
+        // 自定义确认弹窗组件
+        const ConfirmModal = ({ isOpen, onClose, onConfirm, title, message }) => {
+            if (!isOpen) return null;
+            return (
+                <div className="fixed inset-0 bg-black/60 z-[300] flex items-center justify-center p-4 animate-fade-in" onClick={onClose}>
+                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm p-6 transform transition-all scale-100" onClick={e => e.stopPropagation()}>
+                        <div className="flex flex-col items-center text-center">
+                            <div className="bg-red-100 p-3 rounded-full mb-4">
+                                <Icon name="alertTriangle" className="w-8 h-8 text-red-600"/>
+                            </div>
+                            <h3 className="text-xl font-bold text-gray-900 mb-2">{title}</h3>
+                            <p className="text-gray-500 text-sm mb-6">{message}</p>
+                            <div className="flex gap-3 w-full">
+                                <button 
+                                    onClick={onClose} 
+                                    className="flex-1 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-bold transition-colors"
+                                >
+                                    取消
+                                </button>
+                                <button 
+                                    onClick={() => { onConfirm(); onClose(); }} 
+                                    className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-bold transition-colors"
+                                >
+                                    确认清除
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // 溯源弹窗
+        const TraceModal = ({ item, onClose }) => {
+            const [copyStatus, setCopyStatus] = useState({});
+            if (!item) return null;
+            const adRows = useMemo(() => {
+                return item.sourceRows.filter(r => r.type === 'ad').sort((a, b) => b.spend - a.spend);
+            }, [item]);
+            const cpc = item.clicks > 0 ? item.totalSpend / item.clicks : 0;
+            const profit = item.realGMV - item.totalSpend;
+            const totalAdOrders = adRows.reduce((acc, row) => acc + (row.orderCount || 0), 0);
+            const totalCartCount = adRows.reduce((acc, row) => acc + (row.cartCount || 0), 0);
+            const handleCopyId = (id) => {
+                if (id && id !== '-') {
+                    copyToClipboard(id);
+                    setCopyStatus(prev => ({ ...prev, [id]: true }));
+                    setTimeout(() => setCopyStatus(prev => ({ ...prev, [id]: false })), 1500);
+                }
+            };
+
+            return (
+                <div className="fixed inset-0 bg-black/60 z-[100] flex items-center justify-center p-4 animate-fade-in" onClick={onClose}>
+                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-7xl max-h-[90vh] flex flex-col border border-gray-300 overflow-hidden" onClick={e => e.stopPropagation()}>
+                        <div className="p-4 border-b border-gray-200 flex justify-between items-center bg-gray-50 shrink-0">
+                            <div>
+                                <h3 className="font-bold text-gray-900 text-lg flex items-center gap-2"><Icon name="brain" className="text-indigo-600"/> 全方位数据透视</h3>
+                                <div className="text-xs text-gray-500 mt-1 max-w-2xl truncate">{item.name} (ID: {item.id})</div>
+                            </div>
+                            <button onClick={onClose} className="p-2 hover:bg-gray-200 rounded-full text-gray-500 transition-colors"><Icon name="x"/></button>
+                        </div>
+                        <div className="p-6 overflow-y-auto flex-1 bg-gray-50/50">
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                                <div className={`p-4 rounded-xl border-l-4 shadow-sm bg-white ${item.realRoi >= 1 ? 'border-emerald-500' : 'border-red-500'}`}>
+                                    <div className="text-gray-500 text-xs font-bold uppercase tracking-wider mb-1">真实 ROI (投入产出比)</div>
+                                    <div className={`text-3xl font-extrabold ${item.realRoi >= 1 ? 'text-emerald-700' : 'text-red-600'}`}>{item.realRoi.toFixed(2)}</div>
+                                    <div className="text-xs text-gray-400 mt-2">基于净成交金额计算</div>
+                                </div>
+                                <div className="p-4 rounded-xl border-l-4 border-blue-500 shadow-sm bg-white">
+                                    <div className="text-gray-500 text-xs font-bold uppercase tracking-wider mb-1">净盈亏 (成交-花费)</div>
+                                    <div className={`text-3xl font-extrabold ${profit >= 0 ? 'text-blue-700' : 'text-orange-600'}`}>{profit > 0 ? '+' : ''}{formatCurrency(profit)}</div>
+                                    <div className="text-xs text-gray-400 mt-2">不包含货损与人工成本</div>
+                                </div>
+                                <div className="p-4 rounded-xl border-l-4 border-indigo-500 shadow-sm bg-white">
+                                    <div className="text-gray-500 text-xs font-bold uppercase tracking-wider mb-1">全站适配分</div>
+                                    <div className="text-3xl font-extrabold text-indigo-700">{Math.round(item.score)} <span className="text-sm text-indigo-400 font-medium">/ 100</span></div>
+                                    <div className="text-xs text-gray-400 mt-2">{item.level} - {item.diagnosisTags.join(', ')}</div>
+                                </div>
+                            </div>
+                            
+                            {/* 新增：退款详情板块 */}
+                            <h4 className="font-bold text-gray-800 mb-3 text-sm flex items-center gap-2"><Icon name="fileCheck" className="w-4 h-4"/> 退款详情 (退货黑洞判定依据)</h4>
+                            <div className="bg-red-50 rounded-xl border border-red-100 shadow-sm p-4 mb-6">
+                                <div className="grid grid-cols-3 gap-4 text-center divide-x divide-red-200">
+                                    <div>
+                                        <div className="text-xs text-red-600 font-medium mb-1">卖家实收总额</div>
+                                        <div className="text-lg font-bold text-gray-900">{formatCurrency(item.totalIncome)}</div>
+                                    </div>
+                                    <div>
+                                        <div className="text-xs text-red-600 font-medium mb-1">退款总额</div>
+                                        <div className="text-lg font-bold text-red-700">{formatCurrency(item.totalRefund)}</div>
+                                    </div>
+                                    <div className="border-none">
+                                        <div className="text-xs text-red-600 font-medium mb-1">综合退款率</div>
+                                        <div className={`text-2xl font-extrabold ${item.refundRate > 0.25 ? 'text-red-600' : 'text-emerald-600'}`}>{formatPercent(item.refundRate)}</div>
+                                        {item.refundRate > 0.25 && <div className="text-[10px] text-red-500 font-bold animate-pulse">⚠️ 已超 25% 警戒线</div>}
+                                    </div>
+                                </div>
+                            </div>
+
+                            <h4 className="font-bold text-gray-800 mb-3 text-sm flex items-center gap-2"><Icon name="layers" className="w-4 h-4"/> 流量与转化漏斗</h4>
+                            <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 mb-6">
+                                <div className="grid grid-cols-2 md:grid-cols-5 gap-4 divide-x divide-gray-100 text-center">
+                                    <div><div className="text-xs text-gray-500 font-medium mb-1">总花费</div><div className="text-lg font-bold text-gray-900">{formatCurrency(item.totalSpend)}</div></div>
+                                    <div><div className="text-xs text-gray-500 font-medium mb-1">总点击量</div><div className="text-lg font-bold text-gray-900">{item.clicks}</div><div className="text-[10px] text-gray-400">CPC: {formatCurrency(cpc)}</div></div>
+                                    <div><div className="text-xs text-gray-500 font-medium mb-1">点击转化率 (CVR)</div><div className="text-lg font-bold text-blue-600">{formatPercent(item.cvr)}</div></div>
+                                    <div><div className="text-xs text-gray-500 font-medium mb-1">客单价 (AOV)</div><div className="text-lg font-bold text-gray-900">{formatCurrency(item.aov)}</div></div>
+                                    <div className="border-none"><div className="text-xs text-gray-500 font-medium mb-1">点击价值 (EPC净)</div><div className={`text-lg font-bold ${item.epc > cpc ? 'text-emerald-600' : 'text-red-500'}`}>{formatCurrency(item.epc)}</div><div className="text-[10px] text-gray-400">{item.epc > cpc ? '盈利空间' : '亏损风险'}</div></div>
+                                </div>
+                            </div>
+                            <h4 className="font-bold text-gray-800 mb-3 text-sm flex items-center gap-2"><Icon name="list" className="w-4 h-4"/> 推广计划明细 (支持左右拖动查看)</h4>
+                            <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden flex flex-col h-[400px]">
+                                <div className="modal-table-container flex-1 overflow-auto">
+                                    <table className="w-full text-sm text-left border-collapse min-w-[2200px]">
+                                        <thead className="bg-gray-100 text-gray-700 font-bold sticky top-0 z-10 shadow-sm">
+                                            <tr>
+                                                <th className="p-3 border-b whitespace-nowrap w-[200px]">计划名称</th><th className="p-3 border-b whitespace-nowrap w-[200px]">单元名称</th><th className="p-3 border-b whitespace-nowrap">渠道类型</th><th className="p-3 border-b whitespace-nowrap bg-yellow-50 text-yellow-900 border-l border-r border-yellow-100">推广ID (点击复制)</th><th className="p-3 border-b whitespace-nowrap text-right text-red-700">花费</th><th className="p-3 border-b whitespace-nowrap text-right text-emerald-700">广告ROI</th><th className="p-3 border-b whitespace-nowrap text-right">点击量</th><th className="p-3 border-b whitespace-nowrap text-right">CPC</th>
+                                                <th className="p-3 border-b whitespace-nowrap text-right bg-blue-50 text-blue-900">成交转化率 (报表)</th><th className="p-3 border-b whitespace-nowrap text-right bg-blue-50 text-blue-900">直接转化率 (报表)</th><th className="p-3 border-b whitespace-nowrap text-right bg-purple-50 text-purple-900">加购率 (报表)</th><th className="p-3 border-b whitespace-nowrap text-right bg-purple-50 text-purple-900">直接加购率 (报表)</th><th className="p-3 border-b whitespace-nowrap text-right bg-purple-50 text-purple-900">加购成本 (报表)</th>
+                                                <th className="p-3 border-b whitespace-nowrap text-right">广告成交(GMV)</th><th className="p-3 border-b whitespace-nowrap text-gray-500">来源文件</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-gray-100">
+                                            {adRows.map((row, idx) => {
+                                                const rowCpc = row.clicks > 0 ? row.spend / row.clicks : 0;
+                                                const rowRoi = row.spend > 0 ? row.gmv / row.spend : 0;
+                                                let displayCvr = row.extCvr; let displayDirectCvr = row.extDirectCvr; let displayCartRate = row.extCartRate; let displayDirectCartRate = row.extDirectCartRate; let displayCartCost = row.extCartCost;
+                                                if (!displayCvr && row.clicks > 0 && row.orderCount !== undefined) displayCvr = row.orderCount / row.clicks;
+                                                if (!displayDirectCvr && row.clicks > 0 && row.directOrderCount !== undefined) displayDirectCvr = row.directOrderCount / row.clicks;
+                                                if (!displayCartRate && row.clicks > 0 && row.cartCount !== undefined) displayCartRate = row.cartCount / row.clicks;
+                                                if (!displayDirectCartRate && row.clicks > 0 && row.directCartCount !== undefined) displayDirectCartRate = row.directCartCount / row.clicks;
+                                                if (!displayCartCost && row.cartCount > 0 && row.spend > 0) displayCartCost = row.spend / row.cartCount;
+                                                let displayId = '-'; let idLabel = '';
+                                                if (row.subType === 'keyword') { displayId = row.unitId; idLabel = '单元'; } else if (row.subType === 'crowd' || row.subType === 'allStation') { displayId = row.planId; idLabel = '计划'; }
+                                                const isValidId = displayId && displayId !== '-' && displayId !== 'unknown';
+                                                return (
+                                                    <tr key={idx} className="hover:bg-blue-50 transition-colors">
+                                                        <td className="p-3 whitespace-nowrap font-medium text-gray-800 border-r border-gray-100" title={row.planName}><div className="w-[180px] truncate">{row.planName}</div></td>
+                                                        <td className="p-3 whitespace-nowrap text-gray-600 border-r border-gray-100" title={row.unitName}><div className="w-[180px] truncate">{row.unitName}</div></td>
+                                                        <td className="p-3 whitespace-nowrap border-r border-gray-100"><span className={`px-2 py-0.5 rounded text-xs font-bold ${row.subType === 'keyword' ? 'bg-blue-100 text-blue-700' : row.subType === 'allStation' ? 'bg-orange-100 text-orange-700' : 'bg-purple-100 text-purple-700'}`}>{row.subTypeName}</span></td>
+                                                        <td className="p-3 whitespace-nowrap border-r border-gray-100 bg-yellow-50/30">{isValidId ? (<button onClick={(e) => { e.stopPropagation(); handleCopyId(displayId); }} className="flex items-center gap-2 group/btn hover:bg-white px-2 py-1 rounded border border-transparent hover:border-gray-200 transition-all w-full" title={`点击复制${idLabel}ID`}><span className="font-mono text-xs text-gray-600">{displayId}</span><span className={`ml-auto ${copyStatus[displayId] ? 'text-green-600' : 'text-gray-400 opacity-0 group-hover/btn:opacity-100'}`}>{copyStatus[displayId] ? <Icon name="check" className="w-3 h-3"/> : <Icon name="copy" className="w-3 h-3"/>}</span></button>) : (<span className="text-gray-300 text-xs">-</span>)}</td>
+                                                        <td className="p-3 whitespace-nowrap text-right font-mono font-bold text-gray-900 border-r border-gray-100">{formatCurrency(row.spend)}</td>
+                                                        <td className={`p-3 whitespace-nowrap text-right font-bold border-r border-gray-100 ${rowRoi >= 2 ? 'text-emerald-600' : 'text-orange-500'}`}>{rowRoi.toFixed(2)}</td>
+                                                        <td className="p-3 whitespace-nowrap text-right text-gray-700 border-r border-gray-100">{row.clicks}</td>
+                                                        <td className="p-3 whitespace-nowrap text-right text-gray-500 border-r border-gray-100">{formatCurrency(rowCpc)}</td>
+                                                        <td className="p-3 whitespace-nowrap text-right font-bold text-blue-600 border-r border-gray-100 bg-blue-50/30">{formatRawRate(displayCvr)}</td>
+                                                        <td className="p-3 whitespace-nowrap text-right text-blue-500 border-r border-gray-100 bg-blue-50/30">{formatRawRate(displayDirectCvr)}</td>
+                                                        <td className="p-3 whitespace-nowrap text-right text-purple-600 border-r border-gray-100 bg-purple-50/30">{formatRawRate(displayCartRate)}</td>
+                                                        <td className="p-3 whitespace-nowrap text-right text-purple-500 border-r border-gray-100 bg-purple-50/30">{formatRawRate(displayDirectCartRate)}</td>
+                                                        <td className="p-3 whitespace-nowrap text-right text-gray-700 border-r border-gray-100 bg-purple-50/30">{displayCartCost ? (typeof displayCartCost === 'number' ? formatCurrency(displayCartCost) : displayCartCost) : '-'}</td>
+                                                        <td className="p-3 whitespace-nowrap text-right font-medium text-gray-800 border-r border-gray-100">{formatCurrency(row.gmv)}</td>
+                                                        <td className="p-3 whitespace-nowrap text-xs text-gray-400 truncate max-w-[150px]" title={row.fileName}>{row.fileName}</td>
+                                                    </tr>
+                                                );
+                                            })}
+                                            {adRows.length === 0 && <tr><td colSpan="15" className="p-8 text-center text-gray-400">无推广明细数据 (可能为纯自然流商品)</td></tr>}
+                                        </tbody>
+                                        {adRows.length > 0 && (
+                                            <tfoot className="bg-gray-50 font-bold text-gray-900 sticky bottom-0 shadow-inner">
+                                                <tr>
+                                                    <td className="p-3 whitespace-nowrap text-center" colSpan="4">合计 (仅计算可统计项)</td>
+                                                    <td className="p-3 whitespace-nowrap text-right text-red-700">{formatCurrency(item.totalSpend)}</td>
+                                                    <td className="p-3 whitespace-nowrap text-right text-emerald-700">{item.totalSpend > 0 ? (item.adGMV / item.totalSpend).toFixed(2) : '-'}</td>
+                                                    <td className="p-3 whitespace-nowrap text-right">{item.clicks}</td>
+                                                    <td className="p-3 whitespace-nowrap text-right">-</td>
+                                                    <td className="p-3 whitespace-nowrap text-right text-blue-600">{item.clicks > 0 ? formatPercent(totalAdOrders/item.clicks) : '-'}</td>
+                                                    <td className="p-3 whitespace-nowrap text-right text-blue-500">-</td>
+                                                    <td className="p-3 whitespace-nowrap text-right text-purple-600">{item.clicks > 0 ? formatPercent(totalCartCount/item.clicks) : '-'}</td>
+                                                    <td className="p-3 whitespace-nowrap text-right text-purple-500">-</td>
+                                                    <td className="p-3 whitespace-nowrap text-right text-gray-700">{totalCartCount > 0 ? formatCurrency(item.totalSpend/totalCartCount) : '-'}</td>
+                                                    <td className="p-3 whitespace-nowrap text-right">{formatCurrency(item.adGMV)}</td>
+                                                    <td className="p-3"></td>
+                                                </tr>
+                                            </tfoot>
+                                        )}
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                        <div className="p-4 border-t border-gray-200 bg-gray-50 flex justify-end shrink-0">
+                             <button onClick={onClose} className="px-6 py-2 bg-gray-800 hover:bg-gray-900 text-white rounded-lg text-sm font-bold shadow-md transition-all">关闭面板</button>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const SearchDiagnosisModal = ({ isOpen, onClose, files }) => {
+            const [searchTerm, setSearchTerm] = useState("");
+            const [results, setResults] = useState([]);
+            const handleSearch = () => {
+                if (!searchTerm.trim()) return;
+                const matches = [];
+                const term = normalizeName(searchTerm);
+                files.forEach(file => {
+                    file.data.forEach((row, index) => {
+                        const rowValues = Object.values(row).join('');
+                        const rowCleaned = normalizeName(rowValues);
+                        if (rowCleaned.includes(term)) {
+                            const spend = cleanNumber(row['花费'] || row['消耗'] || row['总花费'] || 0);
+                            const id = row['商品ID'] || row['主体Id'] || row['主体ID'] || row['宝贝ID'] || '-';
+                            const name = row['单元名称'] || row['主体名称'] || row['商品名称'] || row['宝贝名称'] || '-';
+                            matches.push({ fileName: file.name, fileType: file.subTypeName || '未知', rowIdx: index + 2, id, name, spend });
+                        }
+                    });
+                });
+                setResults(matches);
+            };
+            const totalSpend = results.reduce((acc, curr) => safeAdd(acc, curr.spend), 0);
+            if (!isOpen) return null;
+            return (
+                <div className="fixed inset-0 bg-black/70 z-[200] flex items-center justify-center p-4" onClick={onClose}>
+                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[85vh] flex flex-col" onClick={e => e.stopPropagation()}>
+                        <div className="p-5 border-b border-gray-200 flex justify-between items-center bg-gray-50 rounded-t-xl">
+                            <h3 className="font-bold text-xl text-gray-800 flex items-center gap-2"><Icon name="bug" className="text-red-600"/> 深度搜索侦探</h3>
+                            <button onClick={onClose} className="text-gray-400 hover:text-gray-700"><Icon name="x"/></button>
+                        </div>
+                        <div className="p-5 bg-blue-50 border-b border-blue-100">
+                            <div className="flex gap-2">
+                                <input type="text" className="flex-1 border border-blue-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none" placeholder="输入关键词 (系统会自动忽略符号匹配)..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSearch()} />
+                                <button onClick={handleSearch} className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-bold transition-colors">搜索</button>
+                            </div>
+                        </div>
+                        <div className="flex-1 overflow-y-auto p-5 bg-gray-50">
+                            {results.length > 0 ? (
+                                <div>
+                                    <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-yellow-800 flex justify-between items-center">
+                                        <span className="font-bold">找到 {results.length} 条原始记录</span>
+                                        <span className="text-lg font-extrabold text-red-600">花费总计: {formatCurrency(totalSpend)}</span>
+                                    </div>
+                                    <div className="bg-white rounded-lg shadow overflow-hidden border border-gray-200">
+                                        <table className="w-full text-sm text-left"><thead className="bg-gray-100 text-gray-700"><tr><th className="p-3 border-b">来源文件</th><th className="p-3 border-b">行号</th><th className="p-3 border-b">ID</th><th className="p-3 border-b">名称</th><th className="p-3 border-b text-right">花费</th></tr></thead>
+                                            <tbody className="divide-y divide-gray-100">{results.map((r, i) => (<tr key={i} className="hover:bg-gray-50"><td className="p-3 text-gray-600"><div>{r.fileName}</div><div className="text-xs text-gray-400">({r.fileType})</div></td><td className="p-3 font-mono text-gray-500">{r.rowIdx}</td><td className="p-3 font-mono text-gray-800 text-xs">{r.id}</td><td className="p-3 text-xs text-gray-600 max-w-[200px] truncate">{r.name}</td><td className="p-3 text-right font-bold text-red-600">{r.spend > 0 ? formatCurrency(r.spend) : '-'}</td></tr>))}</tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            ) : (<div className="text-center py-20 text-gray-400"><Icon name="search" className="w-12 h-12 mx-auto mb-3 opacity-20"/><p>请输入关键词进行全文件搜索...</p></div>)}
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const calculateScore = (item) => {
+            let score = 0;
+            let reasons = [];
+            let tags = []; 
+            let diagnosisColor = "text-gray-600";
+            
+            // 数据准备
+            // FIX: 确保 ppc 被正确解构和使用
+            const { realRoi: roi, aov, totalSpend: spend, refundRate, realBuyerCount: buyers, cvr, ppc, realGMV } = item;
+            
+            // --- 0. 分数计算逻辑 (保留原有逻辑作为基准) ---
+            if (refundRate > 0.25) {
+                // 退货率过高，直接锁死低分
+                score = 30; reasons.push(`退货率极高(${formatPercent(refundRate)})`);
+            } else if (spend === 0) {
+                 if (realGMV > 1000) score = 80;
+                 else if (realGMV > 0) score = 60;
+                 else score = 0;
+            } else {
+                if (buyers < 10) {
+                    score = 30; reasons.push("买家过少权重低");
+                } else {
+                    score = 50; reasons.push("基础销量达标");
+                    // 高低客单价ROI判定
+                    if (aov >= 100) {
+                        if (roi < 2) { score -= 20; reasons.push("高客单ROI<2(亏损)"); } 
+                        else if (roi >= 2 && roi < 3) { score += 10; reasons.push("高客单ROI微利"); } 
+                        else { score += 30; reasons.push("高客单高利润"); }
+                    } else {
+                        if (roi < 3) { score -= 20; reasons.push("低客单ROI<3(亏损)"); } 
+                        else if (roi >= 3 && roi < 4) { score += 10; reasons.push("低客单ROI微利"); } 
+                        else { score += 30; reasons.push("低客单高利润"); }
+                    }
+                }
+                
+                if (refundRate > 0.25) {
+                    score -= 30; reasons.push(`退货率高(${formatPercent(refundRate)})`);
+                    if(score > 40) score = 40; 
+                }
+                
+                if (spend > 2000) { score += 15; reasons.push("高花费权重稳"); } 
+                else if (spend > 500) { score += 5; } 
+                else if (spend < 100 && buyers >= 10) { score -= 5; reasons.push("花费过少数据不稳定"); }
+                
+                // EPC 修正计算
+                const netSales = item.totalIncome - item.totalRefund;
+                const epc = item.clicks > 0 ? netSales / item.clicks : 0;
+                
+                if (epc < 1.2 && buyers >= 10) { score -= 10; reasons.push("EPC过低无法抗价"); }
+            }
+            score = Math.min(100, Math.max(0, score));
+
+            // --- 1. 多标签判定逻辑 (独立判定，可叠加) ---
+            
+            // A. 严重负面标签
+            if (refundRate > 0.25) tags.push("退货黑洞");
+            if (roi < 1 && spend > 200) tags.push("严重亏损");
+            
+            // B. 负面/警示标签
+            // 旧逻辑: if (ppc > 3 && roi < 2) tags.push("点击刺客");
+            // 新逻辑: PPC >= 1.8 且 ROI < 3
+            if (ppc >= 1.8 && roi < 3) tags.push("点击刺客");
+
+            if (cvr < 0.005 && spend > 200) tags.push("转化低迷");
+            if (buyers < 10 && spend > 0) tags.push("基础销量不足");
+            
+            // FIX: 移除评分限制，只要有销量且ROI偏低即打标
+            if (buyers >= 10 && roi < 3) tags.push("需优化ROI");
+
+            // C. 正面标签
+            if (score >= 85) tags.push("强力推荐");
+            if (roi > 5 && spend > 200) tags.push("捡钱模式");
+            if (spend === 0 && realGMV > 1000) tags.push("自然爆款");
+            if (cvr > 0.08 && roi > 2) tags.push("高转化神车");
+            if (refundRate < 0.05 && buyers > 20) tags.push("低退款优品");
+            if (score >= 70 && score < 85) tags.push("潜力爆款");
+
+            // 兜底标签
+            if (tags.length === 0) {
+                if (spend === 0) tags.push(realGMV > 0 ? "自然流测试" : "无数据");
+                else tags.push("暂不适合");
+            }
+
+            // --- 2. 确定主诊断 (用于排序或单行显示颜色) ---
+            // 优先级：严重负面 > 极好正面 > 一般负面 > 一般正面 > 中性
+            const priorityOrder = [
+                "退货黑洞", "严重亏损", 
+                "强力推荐", "捡钱模式", "自然爆款", "高转化神车", 
+                "点击刺客", "转化低迷", 
+                "低退款优品", "潜力爆款",
+                "需优化ROI", "基础销量不足", "暂不适合"
+            ];
+            
+            // 根据优先级排序标签，取第一个作为主诊断
+            tags.sort((a, b) => {
+                let idxA = priorityOrder.indexOf(a);
+                let idxB = priorityOrder.indexOf(b);
+                if (idxA === -1) idxA = 999;
+                if (idxB === -1) idxB = 999;
+                return idxA - idxB;
+            });
+            const mainDiagnosis = tags[0];
+
+            // 评级颜色
+            let level = "不推荐"; let color = "bg-gray-200 text-gray-700 border-gray-300";
+            if (score >= 85) { level = "全站S级"; color = "bg-red-100 text-red-700 border-red-300"; }
+            else if (score >= 70) { level = "全站A级"; color = "bg-orange-100 text-orange-700 border-orange-300"; }
+            else if (score >= 50 && buyers >= 10) { level = "观察期"; color = "bg-blue-100 text-blue-700 border-blue-300"; }
+
+            // 修正EPC (用于返回)
+            const netSales = item.totalIncome - item.totalRefund;
+            const epc = item.clicks > 0 ? netSales / item.clicks : 0;
+
+            return { score, level, color, reasons, diagnosis: mainDiagnosis, diagnosisTags: tags, diagnosisColor, epc };
+        };
+
+        const App = () => {
+            const [activeView, setActiveView] = useState('upload'); // 'upload' | 'analysis'
+            const [adFiles, setAdFiles] = useState([]);
+            const [orderFiles, setOrderFiles] = useState([]);
+            // State for standard filters + new custom dynamic filter
+            const [filters, setFilters] = useState({ 
+                ids: '', minRoi: '', maxRoi: '', minScore: '', maxScore: '', minBuyers: '', maxBuyers: '', diagnosis: [],
+                customField: '', customMin: '', customMax: '' 
+            });
+            const [sortConfig, setSortConfig] = useState({ key: 'score', direction: 'desc' });
+            const [copyFeedback, setCopyFeedback] = useState({});
+            const [batchCopyFeedback, setBatchCopyFeedback] = useState(false);
+            const [colWidths, setColWidths] = useState({ 
+                index: 35, name: 140, score: 60, diagnosis: 120, spend: 75, keywordSpend: 65, allStationSpend: 65, crowdSpend: 65, roi: 60, epc: 50, orders: 60, cvr: 60, aov: 60, gmv: 75, refundRate: 60, ppc: 60 
+            });
+            const [isMergeByName, setIsMergeByName] = useState(false);
+            const [selectedItem, setSelectedItem] = useState(null);
+            const [isSearchModalOpen, setIsSearchModalOpen] = useState(false);
+            const [showOnlyAds, setShowOnlyAds] = useState(false); 
+            
+            // 确认弹窗状态
+            const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
+            
+            const [visibleCount, setVisibleCount] = useState(50);
+            const tableContainerRef = useRef(null);
+
+            const diagnosisOptions = [
+                { label: "强力推荐", color: "bg-red-100 text-red-700 border-red-300" },
+                { label: "捡钱模式", color: "bg-pink-100 text-pink-700 border-pink-300" },
+                { label: "潜力爆款", color: "bg-orange-100 text-orange-700 border-orange-300" },
+                { label: "高转化神车", color: "bg-purple-100 text-purple-700 border-purple-300" },
+                { label: "低退款优品", color: "bg-teal-100 text-teal-700 border-teal-300" },
+                { label: "需优化ROI", color: "bg-blue-100 text-blue-700 border-blue-300" },
+                { label: "点击刺客", color: "bg-yellow-100 text-yellow-700 border-yellow-300" },
+                { label: "退货黑洞", color: "bg-gray-800 text-white border-gray-600" },
+                { label: "严重亏损", color: "bg-red-200 text-red-900 border-red-400" },
+                { label: "转化低迷", color: "bg-gray-200 text-gray-600 border-gray-400" },
+                { label: "基础销量不足", color: "bg-gray-100 text-gray-400 border-gray-300" },
+                { label: "自然爆款", color: "bg-emerald-100 text-emerald-700 border-emerald-300" },
+            ];
+
+             const customFieldOptions = [
+                { key: 'refundRate', label: '退款率' },
+                { key: 'cvr', label: '转化率' },
+                { key: 'ppc', label: '平均PPC' },
+                { key: 'epc', label: 'EPC (净)' },
+                { key: 'totalSpend', label: '总花费' },
+                { key: 'aov', label: '客单价' },
+                { key: 'realGMV', label: '净成交GMV' },
+                { key: 'keywordSpend', label: '关键词花费' },
+                { key: 'crowdSpend', label: '人群花费' },
+                { key: 'allStationSpend', label: '全站花费' },
+            ];
+
+
+            const findColumnValue = (row, possibleKeys) => {
+                const keys = Object.keys(row);
+                for (let key of possibleKeys) { if (row[key] !== undefined) return row[key]; }
+                for (let rowKey of keys) { if (possibleKeys.includes(rowKey.trim())) return row[rowKey]; }
+                return undefined;
+            };
+
+            const parseFile = (file, type) => {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    try {
+                        const workbook = XLSX.read(e.target.result, { type: 'binary' });
+                        const sheet = workbook.Sheets[workbook.SheetNames[0]];
+                        const json = XLSX.utils.sheet_to_json(sheet);
+                        let subType = 'unknown'; let subTypeName = '未知类型'; let totalFileSpend = 0;
+                        if (type === 'ad') {
+                            const headers = json.length ? Object.keys(json[0]).map(h => h.trim()) : [];
+                            if (headers.includes('商品ID') && (headers.includes('单元名称') || headers.includes('关键词数量'))) { subType = 'keyword'; subTypeName = '关键词推广'; }
+                            else if ((headers.includes('主体ID') || headers.includes('主体Id')) && (headers.includes('场景类型') || headers.includes('人群名称') || headers.includes('定向类型'))) { subType = 'crowd'; subTypeName = '精准人群'; }
+                            else if (headers.includes('主体Id') || headers.includes('主体ID') || headers.includes('预算类型')) { subType = 'allStation'; subTypeName = '全站推广'; }
+                            json.forEach(row => { totalFileSpend = safeAdd(totalFileSpend, cleanNumber(findColumnValue(row, ['花费', '消耗', '总花费']))); });
+                        }
+                        const fileObj = { id: Date.now() + Math.random(), name: file.name, data: json, subType, subTypeName, totalFileSpend };
+                        if (type === 'ad') setAdFiles(prev => [...prev, fileObj]); else setOrderFiles(prev => [...prev, fileObj]);
+                    } catch (err) { console.error("文件解析失败", err); }
+                };
+                reader.readAsBinaryString(file);
+            };
+
+            const handleDrop = (e, type) => { e.preventDefault(); Array.from(e.dataTransfer.files).forEach(f => parseFile(f, type)); };
+
+            const processedData = useMemo(() => {
+                const products = {};
+                const nameToId = {};
+                const getKey = (id, name) => isMergeByName && name ? normalizeName(name) : id;
+
+                // 1. 处理广告文件
+                adFiles.forEach(file => {
+                    file.data.forEach((row, idx) => {
+                        let id = findColumnValue(row, ['商品ID', '主体Id', '主体ID', '宝贝ID']);
+                        let name = findColumnValue(row, ['单元名称', '主体名称', '商品名称', '宝贝名称']);
+                        if (!id && !name) return;
+                        const rawId = id; id = id ? String(id).trim() : 'unknown';
+                        const key = getKey(id, name);
+                        if (!products[key]) {
+                            products[key] = { id: id, name: name || '未知', totalSpend: 0, keywordSpend: 0, allStationSpend: 0, crowdSpend: 0, adGMV: 0, clicks: 0, realGMV: 0, totalIncome: 0, totalRefund: 0, buyerSet: new Set(), sourceRows: [], isFuzzyMatched: false };
+                        }
+                        if (name && (products[key].name === '未知' || name.length > products[key].name.length)) products[key].name = name;
+                        if (name) nameToId[normalizeName(name)] = key;
+                        const spend = cleanNumber(findColumnValue(row, ['花费', '消耗', '总花费']));
+                        products[key].totalSpend = safeAdd(products[key].totalSpend, spend);
+                        if (file.subType === 'keyword') products[key].keywordSpend = safeAdd(products[key].keywordSpend, spend);
+                        else if (file.subType === 'allStation') products[key].allStationSpend = safeAdd(products[key].allStationSpend, spend);
+                        else if (file.subType === 'crowd') products[key].crowdSpend = safeAdd(products[key].crowdSpend, spend);
+                        const gmv = cleanNumber(findColumnValue(row, ['总成交金额', '成交金额']));
+                        products[key].adGMV = safeAdd(products[key].adGMV, gmv);
+                        const clicks = cleanNumber(findColumnValue(row, ['点击量', '点击']));
+                        products[key].clicks += clicks;
+                        
+                        const planName = findColumnValue(row, ['计划名称', '推广计划', '计划标题', '推广计划名称']);
+                        const unitName = findColumnValue(row, ['单元名称', '推广单元', '单元标题', '推广单元名称']);
+                        const planId = findColumnValue(row, ['计划ID', '计划id', 'campaignId', '计划Id']);
+                        const unitId = findColumnValue(row, ['单元ID', '单元id', 'adGroupId', '单元Id']);
+                        const orderCount = cleanNumber(findColumnValue(row, ['成交笔数', '支付订单量', '成交订单量', '成交量']));
+                        const directOrderCount = cleanNumber(findColumnValue(row, ['直接成交笔数', '直接支付订单量', '直接成交量']));
+                        const cartCount = cleanNumber(findColumnValue(row, ['商品加购数', '加购数', '收藏加购数']));
+                        const directCartCount = cleanNumber(findColumnValue(row, ['直接商品加购数', '直接加购数']));
+                        const extCvr = findColumnValue(row, ['点击转化率', '成交转化率', '转化率']);
+                        const extDirectCvr = findColumnValue(row, ['直接转化率', '直接成交转化率']);
+                        const extCartRate = findColumnValue(row, ['加购率', '商品加购率']);
+                        const extDirectCartRate = findColumnValue(row, ['直接加购率']);
+                        const extCartCost = findColumnValue(row, ['加购成本', '商品加购成本']);
+
+                        products[key].sourceRows.push({ 
+                            type: 'ad', fileName: file.name, subType: file.subType, subTypeName: file.subTypeName, 
+                            spend, gmv, clicks, rawId, rowIdx: idx,
+                            planName: planName || '-', unitName: unitName || '-', planId: planId || '-', unitId: unitId || '-',
+                            orderCount, directOrderCount, cartCount, directCartCount,
+                            extCvr, extDirectCvr, extCartRate, extDirectCartRate, extCartCost
+                        });
+                    });
+                });
+
+                // 2. 处理订单文件
+                orderFiles.forEach(file => {
+                    file.data.forEach((row, idx) => {
+                        const name = findColumnValue(row, ['商品名称', '宝贝名称', '商品标题']);
+                        const amount = cleanNumber(findColumnValue(row, ['卖家实收', '卖家实收金额', '实付金额']));
+                        const refund = cleanNumber(findColumnValue(row, ['订单退款金额', '退款金额']));
+                        const netAmount = safeSub(amount, refund);
+                        const rawOrderId = findColumnValue(row, ['原始线上订单号', '线上订单号', '订单编号']);
+                        
+                        if (amount > 0) { 
+                            const normName = normalizeName(name); 
+                            let matchKey = null;
+                            let orderId = findColumnValue(row, ['商品ID', '宝贝ID', '商家编码', 'SKU ID']);
+                            if (orderId) {
+                                orderId = String(orderId).trim();
+                                const keyById = getKey(orderId, name);
+                                if (products[keyById]) matchKey = keyById;
+                            }
+                            if (!matchKey && name) {
+                                matchKey = nameToId[normName];
+                                if (!matchKey) {
+                                    for (let pKey in products) {
+                                        const adName = normalizeName(products[pKey].name);
+                                        if (adName && (normName.includes(adName) || adName.includes(normName)) && adName.length > 2) {
+                                            matchKey = pKey; products[pKey].isFuzzyMatched = true; break;
+                                        }
+                                    }
+                                }
+                                if (!matchKey) {
+                                    const truncatedOrderName = normName.length > 5 ? normName.slice(0, -5) : normName;
+                                    for (let pKey in products) {
+                                        const adName = normalizeName(products[pKey].name);
+                                        if (adName && adName.length > 2 && truncatedOrderName.includes(adName)) {
+                                            matchKey = pKey; products[pKey].isFuzzyMatched = true; 
+                                            if (name.length > products[pKey].name.length) products[pKey].name = name; 
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                            if (!matchKey) {
+                                const newId = orderId || `organic_${idx}_${Math.random().toString(36).substr(2, 5)}`;
+                                matchKey = getKey(newId, name);
+                                if (!products[matchKey]) {
+                                    products[matchKey] = {
+                                        id: orderId || '-', name: name || '未知自然流商品',
+                                        totalSpend: 0, keywordSpend: 0, allStationSpend: 0, crowdSpend: 0,
+                                        adGMV: 0, clicks: 0,
+                                        realGMV: 0, totalIncome: 0, totalRefund: 0, buyerSet: new Set(), sourceRows: [], isFuzzyMatched: false
+                                    };
+                                    if(name) nameToId[normName] = matchKey;
+                                }
+                            }
+                            if (products[matchKey]) {
+                                products[matchKey].realGMV = safeAdd(products[matchKey].realGMV, netAmount);
+                                products[matchKey].totalIncome = safeAdd(products[matchKey].totalIncome, amount);
+                                products[matchKey].totalRefund = safeAdd(products[matchKey].totalRefund, refund);
+                                if (rawOrderId) products[matchKey].buyerSet.add(String(rawOrderId).trim()); else products[matchKey].buyerSet.add(`unknown_${idx}`);
+                                products[matchKey].sourceRows.push({ type: 'order', fileName: file.name, realGMV: netAmount, income: amount, refund: refund, rawOrderId, rowIdx: idx });
+                            }
+                        }
+                    });
+                });
+
+                return Object.values(products).map(p => {
+                    const realRoi = p.totalSpend > 0 ? p.realGMV / p.totalSpend : (p.realGMV > 0 ? 999 : 0);
+                    const cvr = p.clicks > 0 ? p.buyerSet.size / p.clicks : 0;
+                    const realBuyerCount = p.buyerSet.size;
+                    const totalOrders = realBuyerCount;
+                    const aov = totalOrders > 0 ? p.realGMV / totalOrders : 0;
+                    const refundRate = p.totalIncome > 0 ? p.totalRefund / p.totalIncome : 0; 
+                    const ppc = p.clicks > 0 ? p.totalSpend / p.clicks : 0;
+                    // FIX: 传递 ppc 给 calculateScore，修复诊断标签失效问题
+                    return { ...p, realRoi, cvr, aov, totalOrders, realBuyerCount, refundRate, ppc, ...calculateScore({ ...p, realRoi, cvr, aov, realBuyerCount, refundRate, ppc }) };
+                });
+            }, [adFiles, orderFiles, isMergeByName]);
+
+            const filteredAndSortedData = useMemo(() => {
+                let data = [...processedData];
+                if (showOnlyAds) data = data.filter(item => item.totalSpend > 0);
+                
+                // Static filters
+                if (filters.ids.trim()) { const idList = filters.ids.split(/[\s,]+/).filter(Boolean); if (idList.length > 0) data = data.filter(item => idList.includes(item.id)); }
+                if (filters.minBuyers) data = data.filter(item => item.realBuyerCount >= Number(filters.minBuyers));
+                if (filters.maxBuyers) data = data.filter(item => item.realBuyerCount <= Number(filters.maxBuyers));
+                if (filters.minRoi) data = data.filter(item => item.realRoi >= Number(filters.minRoi));
+                if (filters.maxRoi) data = data.filter(item => item.realRoi <= Number(filters.maxRoi));
+                if (filters.minScore) data = data.filter(item => item.score >= Number(filters.minScore));
+                if (filters.maxScore) data = data.filter(item => item.score <= Number(filters.maxScore));
+                
+                // 新逻辑: 只要命中任意选中的标签即可
+                if (filters.diagnosis.length > 0) { 
+                    data = data.filter(item => filters.diagnosis.some(d => item.diagnosisTags.includes(d))); 
+                }
+
+                // Dynamic custom filter logic
+                if (filters.customField && (filters.customMin !== '' || filters.customMax !== '')) {
+                     const min = filters.customMin !== '' ? Number(filters.customMin) : -Infinity;
+                     const max = filters.customMax !== '' ? Number(filters.customMax) : Infinity;
+                     
+                     // Identify percentage fields
+                     const isPercent = ['refundRate', 'cvr'].includes(filters.customField);
+
+                     data = data.filter(item => {
+                         let val = item[filters.customField];
+                         if (val === undefined || val === null) val = 0;
+                         
+                         // Scale actual value to match input format (0.25 -> 25)
+                         if (isPercent) {
+                             val = val * 100; 
+                         }
+                         
+                         return val >= min && val <= max;
+                     });
+                }
+
+                if (sortConfig.key) { data.sort((a, b) => { const valA = a[sortConfig.key]; const valB = b[sortConfig.key]; return sortConfig.direction === 'asc' ? valA - valB : valB - valA; }); }
+                return data;
+            }, [processedData, filters, sortConfig, showOnlyAds]);
+
+            const handleSort = (key) => setSortConfig(prev => ({ key, direction: prev.key === key && prev.direction === 'desc' ? 'asc' : 'desc' }));
+            const handleCopyText = (text) => { if (copyToClipboard(text)) { setCopyFeedback(prev => ({ ...prev, [text]: true })); setTimeout(() => setCopyFeedback(prev => ({ ...prev, [text]: false })), 2000); } };
+            const handleBatchCopyIds = () => { const allIds = filteredAndSortedData.map(item => item.id).join('\n'); if (allIds && copyToClipboard(allIds)) { setBatchCopyFeedback(true); setTimeout(() => setBatchCopyFeedback(false), 2000); } else if (!allIds) console.log("无数据"); };
+            
+            const handleResetFilters = () => { 
+                setFilters({ ids: '', minRoi: '', maxRoi: '', minScore: '', maxScore: '', minBuyers: '', maxBuyers: '', diagnosis: [], customField: '', customMin: '', customMax: '' }); 
+                setShowOnlyAds(false); 
+            };
+            
+            const toggleDiagnosis = (tag) => { setFilters(prev => { const newDiag = prev.diagnosis.includes(tag) ? prev.diagnosis.filter(d => d !== tag) : [...prev.diagnosis, tag]; return { ...prev, diagnosis: newDiag }; }); };
+            const exportData = () => { const wsData = filteredAndSortedData.map(item => ({ '商品ID': item.id, '商品名称': item.name, '全站评分': item.score, '评级': item.level, '智能诊断': item.diagnosisTags.join(','), 'EPC(净)': item.epc.toFixed(2), '平均PPC': item.ppc.toFixed(2), '总花费': item.totalSpend, '关键词花费': item.keywordSpend.toFixed(2), '人群花费': item.crowdSpend.toFixed(2), '全站花费': item.allStationSpend.toFixed(2), '真实ROI(净)': item.realRoi > 900 ? '自然流' : item.realRoi.toFixed(2), '真实买家数': item.totalOrders, '转化率': formatPercent(item.cvr), '客单价': formatCurrency(item.aov), '净成交金额': item.realGMV, '退款率': formatPercent(item.refundRate) })); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(wsData), "全站评测V8.9"); XLSX.writeFile(wb, "全站推广评测_V8.9.xlsx"); };
+
+            const executeClearData = () => {
+                setAdFiles([]);
+                setOrderFiles([]);
+                setFilters({ ids: '', minRoi: '', maxRoi: '', minScore: '', maxScore: '', minBuyers: '', maxBuyers: '', diagnosis: [], customField: '', customMin: '', customMax: '' });
+                if(document.getElementById('adInput')) document.getElementById('adInput').value = '';
+                if(document.getElementById('orderInput')) document.getElementById('orderInput').value = '';
+            };
+
+            const handleClearClick = () => {
+                setIsConfirmModalOpen(true);
+            };
+
+            useEffect(() => {
+                setVisibleCount(50);
+                if (tableContainerRef.current) tableContainerRef.current.scrollTop = 0;
+            }, [filteredAndSortedData, activeView]);
+
+            const handleScroll = (e) => {
+                const { scrollTop, clientHeight, scrollHeight } = e.target;
+                if (scrollHeight - scrollTop - clientHeight < 200) {
+                    if (visibleCount < filteredAndSortedData.length) {
+                        setVisibleCount(prev => Math.min(prev + 50, filteredAndSortedData.length));
+                    }
+                }
+            };
+
+            const displayData = filteredAndSortedData.slice(0, visibleCount);
+
+            return (
+                <div className="min-h-screen p-6 max-w-[2400px] mx-auto pb-24 relative flex flex-col">
+                    {/* 全局弹窗挂载点 */}
+                    {selectedItem && <TraceModal item={selectedItem} onClose={() => setSelectedItem(null)} />}
+                    {isSearchModalOpen && <SearchDiagnosisModal isOpen={isSearchModalOpen} onClose={() => setIsSearchModalOpen(false)} files={[...adFiles, ...orderFiles]} />}
+                    <ConfirmModal 
+                        isOpen={isConfirmModalOpen} 
+                        onClose={() => setIsConfirmModalOpen(false)} 
+                        onConfirm={executeClearData}
+                        title="确认清除所有数据？"
+                        message="此操作将清空所有已上传的报表和分析结果，且不可恢复。您需要重新上传文件才能继续分析。"
+                    />
+                    
+                    <header className="mb-6 text-center">
+                        <h1 className="text-3xl font-extrabold text-gray-900 flex items-center justify-center gap-2">
+                            <span className="bg-gradient-to-r from-indigo-700 to-purple-700 text-white px-3 py-1 rounded-lg text-2xl shadow-md flex items-center gap-1"><Icon name="brain"/> V8.9</span> 全站推广 · 选品系统
+                        </h1>
+                    </header>
+
+                    {activeView === 'upload' && (
+                        <div className="max-w-5xl mx-auto animate-fade-in">
+                            <div className="bg-white rounded-2xl shadow-lg border border-gray-200 p-8 text-center mb-8">
+                                <h2 className="text-2xl font-bold text-gray-800 mb-2">数据上传中心</h2>
+                                <p className="text-gray-500 mb-8">请上传您的推广报表和发货订单，系统将自动进行清洗与合并分析。</p>
+                                
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                    <div 
+                                        className="bg-blue-50 border-2 border-dashed border-blue-300 hover:border-blue-500 hover:bg-blue-100 rounded-2xl p-10 cursor-pointer transition-all flex flex-col items-center justify-center h-64 group"
+                                        onClick={()=>document.getElementById('adInput').click()} 
+                                        onDragOver={e=>e.preventDefault()} 
+                                        onDrop={e=>handleDrop(e, 'ad')}
+                                    >
+                                        <input id="adInput" type="file" multiple className="hidden" onChange={e=>handleDrop({preventDefault:()=>{},dataTransfer:{files:e.target.files}},'ad')} />
+                                        <div className="bg-white p-4 rounded-full shadow-sm mb-4 group-hover:scale-110 transition-transform"><Icon name="trend" className="w-10 h-10 text-blue-600"/></div>
+                                        <div className="text-xl font-bold text-blue-900 mb-1">上传广告推广报表</div>
+                                        <div className="text-sm text-blue-600 font-medium opacity-80">支持 关键词 / 全站 / 人群</div>
+                                        {adFiles.length > 0 && <div className="mt-4 px-3 py-1 bg-blue-600 text-white text-xs font-bold rounded-full shadow">已上传 {adFiles.length} 个文件</div>}
+                                    </div>
+
+                                    <div 
+                                        className="bg-emerald-50 border-2 border-dashed border-emerald-300 hover:border-emerald-500 hover:bg-emerald-100 rounded-2xl p-10 cursor-pointer transition-all flex flex-col items-center justify-center h-64 group"
+                                        onClick={()=>document.getElementById('orderInput').click()} 
+                                        onDragOver={e=>e.preventDefault()} 
+                                        onDrop={e=>handleDrop(e, 'order')}
+                                    >
+                                        <input id="orderInput" type="file" multiple className="hidden" onChange={e=>handleDrop({preventDefault:()=>{},dataTransfer:{files:e.target.files}},'order')} />
+                                        <div className="bg-white p-4 rounded-full shadow-sm mb-4 group-hover:scale-110 transition-transform"><Icon name="fileCheck" className="w-10 h-10 text-emerald-600"/></div>
+                                        <div className="text-xl font-bold text-emerald-900 mb-1">上传发货订单报表</div>
+                                        <div className="text-sm text-emerald-600 font-medium opacity-80">聚水潭发货单 (含退款数据)</div>
+                                        {orderFiles.length > 0 && <div className="mt-4 px-3 py-1 bg-emerald-600 text-white text-xs font-bold rounded-full shadow">已上传 {orderFiles.length} 个文件</div>}
+                                    </div>
+                                </div>
+
+                                {(adFiles.length > 0 || orderFiles.length > 0) && (
+                                    <div className="mt-10 animate-fade-in flex flex-col items-center gap-4">
+                                        <button 
+                                            onClick={() => setActiveView('analysis')}
+                                            className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white text-xl font-bold py-4 px-12 rounded-full shadow-xl transform hover:scale-105 transition-all flex items-center gap-3 mx-auto"
+                                        >
+                                            <Icon name="brain" className="w-6 h-6"/>
+                                            开始全站深度分析
+                                        </button>
+                                        
+                                        <button 
+                                            onClick={handleClearClick}
+                                            className="text-gray-400 hover:text-red-500 text-sm font-medium flex items-center gap-1 transition-colors mt-2"
+                                        >
+                                            <Icon name="trash" className="w-4 h-4"/> 清除所有数据重新上传
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
+                    {activeView === 'analysis' && (
+                        <div className="animate-fade-in">
+                            {processedData.length > 0 ? (
+                                <>
+                                    {/* Refined Toolbar */}
+                                    <div className="flex flex-wrap items-center justify-between gap-2 mb-4 bg-white p-2 rounded-lg border border-gray-200 shadow-sm sticky top-0 z-30">
+                                        <div className="flex items-center gap-2">
+                                            {/* Back Button */}
+                                            <button onClick={() => setActiveView('upload')} className="px-3 py-1.5 text-xs font-bold text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors flex items-center gap-1">
+                                                <Icon name="arrowLeft" className="w-3 h-3"/>
+                                                上传
+                                            </button>
+                                            
+                                            <div className="w-px h-4 bg-gray-300 mx-1"></div>
+
+                                            {/* Toggles */}
+                                            <button 
+                                                onClick={() => setIsMergeByName(!isMergeByName)}
+                                                className={`px-3 py-1.5 text-xs font-bold rounded-md flex items-center gap-1 transition-all border ${isMergeByName ? 'bg-purple-600 text-white border-purple-600' : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'}`}
+                                            >
+                                                <Icon name="merge" className="w-3 h-3"/> 名称合并
+                                            </button>
+
+                                            <button 
+                                                onClick={() => setShowOnlyAds(!showOnlyAds)}
+                                                className={`px-3 py-1.5 text-xs font-bold rounded-md flex items-center gap-1 transition-all border ${showOnlyAds ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'}`}
+                                            >
+                                                <Icon name="eye" className="w-3 h-3"/> 仅看推广
+                                            </button>
+
+                                            <div className="w-px h-4 bg-gray-300 mx-1"></div>
+
+                                            {/* Utilities */}
+                                            <button onClick={handleResetFilters} className="px-3 py-1.5 text-xs font-bold text-gray-600 bg-white border border-gray-300 hover:bg-gray-50 rounded-md transition-colors flex items-center gap-1">
+                                                <Icon name="refresh" className="w-3 h-3"/> 重置
+                                            </button>
+                                            
+                                            <button onClick={() => setIsSearchModalOpen(true)} className="px-3 py-1.5 text-xs font-bold text-red-600 bg-red-50 border border-red-200 hover:bg-red-100 rounded-md transition-colors flex items-center gap-1">
+                                                <Icon name="bug" className="w-3 h-3"/> 侦探
+                                            </button>
+                                        </div>
+
+                                        <div className="flex gap-2">
+                                            <button onClick={handleBatchCopyIds} className="px-3 py-1.5 text-xs font-bold text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 rounded-md transition-colors flex items-center gap-1">
+                                                <Icon name="copy" className="w-3 h-3"/> ID
+                                            </button>
+                                            <button onClick={exportData} className="px-3 py-1.5 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-md shadow-sm transition-colors flex items-center gap-1">
+                                                <Icon name="upload" className="w-3 h-3"/> 导出
+                                            </button>
+                                        </div>
+                                    </div>
+                                    
+                                    {/* 紧凑型筛选栏 */}
+                                    <div className="flex flex-wrap gap-2 items-center bg-gray-50 p-3 rounded-lg border border-gray-200 mb-4">
+                                        <div className="flex items-center gap-1.5 px-2 py-1.5 bg-white rounded-md border border-gray-300 shadow-sm w-48">
+                                            <Icon name="search" className="w-3.5 h-3.5 text-gray-400" />
+                                            <input className="w-full text-xs font-mono outline-none bg-transparent" placeholder="输入ID (逗号分隔)" value={filters.ids} onChange={(e) => setFilters({...filters, ids: e.target.value})} />
+                                        </div>
+                                        <div className="h-6 w-px bg-gray-300 mx-1"></div>
+                                        <CompactFilterGroup label="销量" iconName="users" minVal={filters.minBuyers} maxVal={filters.maxBuyers} setMin={(v) => setFilters({...filters, minBuyers: v})} setMax={(v) => setFilters({...filters, maxBuyers: v})} colorClass="text-orange-700" bgClass="bg-white" borderClass="border-orange-200 hover:border-orange-300" iconClass="text-orange-500" />
+                                        <CompactFilterGroup label="评分" iconName="target" minVal={filters.minScore} maxVal={filters.maxScore} setMin={(v) => setFilters({...filters, minScore: v})} setMax={(v) => setFilters({...filters, maxScore: v})} colorClass="text-indigo-700" bgClass="bg-white" borderClass="border-indigo-200 hover:border-indigo-300" iconClass="text-indigo-500" />
+                                        <CompactFilterGroup label="ROI" iconName="trend" minVal={filters.minRoi} maxVal={filters.maxRoi} setMin={(v) => setFilters({...filters, minRoi: v})} setMax={(v) => setFilters({...filters, maxRoi: v})} colorClass="text-emerald-700" bgClass="bg-white" borderClass="border-emerald-200 hover:border-emerald-300" iconClass="text-emerald-500" />
+                                        
+                                        {/* New Custom Filter Component */}
+                                        <div className="h-6 w-px bg-gray-300 mx-1"></div>
+                                        <CustomFilterGroup 
+                                            selectedField={filters.customField}
+                                            onFieldChange={(val) => setFilters({...filters, customField: val})}
+                                            minVal={filters.customMin}
+                                            maxVal={filters.customMax}
+                                            setMin={(val) => setFilters({...filters, customMin: val})}
+                                            setMax={(val) => setFilters({...filters, customMax: val})}
+                                            options={customFieldOptions}
+                                        />
+
+                                        <div className="h-6 w-px bg-gray-300 mx-1"></div>
+                                        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+                                            <span className="text-xs font-bold text-gray-400 flex items-center gap-1 mr-1"><Icon name="tag" className="w-3 h-3"/> 诊断:</span>
+                                            {diagnosisOptions.map(opt => (
+                                                <button key={opt.label} onClick={() => toggleDiagnosis(opt.label)} className={`px-2 py-0.5 rounded text-[10px] font-bold border transition-all whitespace-nowrap ${filters.diagnosis.includes(opt.label) ? `ring-1 ring-indigo-500 ${opt.color} shadow-sm` : "bg-white text-gray-500 border-gray-300 hover:border-gray-400 hover:bg-gray-50 hover:text-gray-700"}`}>{opt.label}</button>
+                                            ))}
+                                            {filters.diagnosis.length > 0 && <button onClick={() => setFilters(prev => ({...prev, diagnosis: []}))} className="text-[10px] text-gray-400 hover:text-red-500 ml-1 underline whitespace-nowrap"><Icon name="x" className="w-3 h-3"/></button>}
+                                        </div>
+                                    </div>
+
+                                    {/* 表格区域 */}
+                                    <div ref={tableContainerRef} onScroll={handleScroll} className="bg-white border border-gray-300 rounded-xl shadow-md overflow-auto max-h-[82vh] w-full">
+                                        <table className="text-sm border-collapse table-fixed w-full min-w-[1200px]">
+                                            <thead className="bg-gray-200 text-gray-900 font-bold border-b-2 border-gray-300 sticky top-0 z-20 shadow-md">
+                                                <tr>
+                                                    <ResizableTh width={colWidths.index} onResize={w=>setColWidths({...colWidths, index: w})}>#</ResizableTh>
+                                                    <ResizableTh width={colWidths.name} onResize={w=>setColWidths({...colWidths, name: w})} onClick={()=>handleSort('name')} title="点击查看详情" className="cursor-pointer hover:bg-gray-300">商品 (ID/名称可复制)</ResizableTh>
+                                                    <ResizableTh width={colWidths.score} onResize={w=>setColWidths({...colWidths, score: w})} onClick={()=>handleSort('score')} className="text-indigo-800 bg-indigo-50 hover:bg-indigo-100 border-l border-indigo-200">全站适配分 ↕</ResizableTh>
+                                                    <ResizableTh width={colWidths.diagnosis} onResize={w=>setColWidths({...colWidths, diagnosis: w})} className="text-gray-800">智能诊断</ResizableTh>
+                                                    <ResizableTh width={colWidths.refundRate} onResize={w=>setColWidths({...colWidths, refundRate: w})} onClick={()=>handleSort('refundRate')} className="text-red-800 bg-red-50 border-r border-red-100">退款率 ↕</ResizableTh>
+                                                    <ResizableTh width={colWidths.roi} onResize={w=>setColWidths({...colWidths, roi: w})} onClick={()=>handleSort('realRoi')} className="bg-emerald-50 text-emerald-800 border-l border-r border-emerald-200">真实ROI ↕</ResizableTh>
+                                                    <ResizableTh width={colWidths.orders} onResize={w=>setColWidths({...colWidths, orders: w})} className="text-orange-800 bg-orange-50 font-bold" title="去重的真实买家数">真实买家 ↕</ResizableTh>
+                                                    
+                                                    {/* 新位置：转化率 */}
+                                                    <ResizableTh width={colWidths.cvr} onResize={w=>setColWidths({...colWidths, cvr: w})} onClick={()=>handleSort('cvr')} className="text-gray-800">转化率 ↕</ResizableTh>
+                                                    {/* 新位置：平均PPC */}
+                                                    <ResizableTh width={colWidths.ppc} onResize={w=>setColWidths({...colWidths, ppc: w})} onClick={()=>handleSort('ppc')} className="text-gray-800 bg-gray-50 border-r border-gray-200">平均PPC ↕</ResizableTh>
+
+                                                    <ResizableTh width={colWidths.keywordSpend} onResize={w=>setColWidths({...colWidths, keywordSpend: w})} className="text-gray-700 font-semibold bg-gray-50">关键词</ResizableTh>
+                                                    <ResizableTh width={colWidths.crowdSpend} onResize={w=>setColWidths({...colWidths, crowdSpend: w})} className="text-gray-700 font-semibold bg-gray-50">人群</ResizableTh>
+                                                    <ResizableTh width={colWidths.allStationSpend} onResize={w=>setColWidths({...colWidths, allStationSpend: w})} className="text-gray-700 font-semibold bg-gray-50">全站</ResizableTh>
+                                                    
+                                                    {/* 新位置：总花费 */}
+                                                    <ResizableTh width={colWidths.spend} onResize={w=>setColWidths({...colWidths, spend: w})} onClick={()=>handleSort('totalSpend')} className="text-gray-900 border-l border-gray-200">总花费 ↕</ResizableTh>
+
+                                                    <ResizableTh width={colWidths.aov} onResize={w=>setColWidths({...colWidths, aov: w})} onClick={()=>handleSort('aov')} className="text-gray-800">客单价 ↕</ResizableTh>
+                                                    <ResizableTh width={colWidths.gmv} onResize={w=>setColWidths({...colWidths, gmv: w})} className="text-gray-800">成交(净) ↕</ResizableTh>
+                                                    <ResizableTh width={colWidths.epc} onResize={w=>setColWidths({...colWidths, epc: w})} onClick={()=>handleSort('epc')} className="text-blue-800 bg-blue-50 border-l border-blue-100">EPC (净) ↕</ResizableTh>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-gray-300">
+                                                {displayData.map((item, index) => (
+                                                    <tr key={item.id} className={`group transition-colors ${item.totalSpend === 0 ? 'hover:bg-green-50 bg-white' : 'hover:bg-blue-50 bg-white'}`}>
+                                                        <td className="px-2 py-2 text-center text-gray-700 font-bold text-xs align-middle border-r border-gray-100">{index + 1}</td>
+                                                        <td className="px-2 py-2 align-middle text-center cursor-pointer border-r border-gray-100" onClick={() => setSelectedItem(item)} title="点击查看详情">
+                                                            <div className="relative group/name">
+                                                                <div className="line-clamp-6 text-xs font-bold text-blue-800 mb-2 leading-relaxed mx-auto hover:underline">{item.name}</div>
+                                                                <button onClick={(e) => { e.stopPropagation(); handleCopyText(item.name); }} className={`absolute top-0 right-0 p-1 bg-white rounded shadow border border-gray-200 hover:text-blue-600 transition-opacity ${copyFeedback[item.name] ? 'opacity-100 text-green-600' : 'opacity-0 group-hover/name:opacity-100 text-gray-400'}`} title="复制商品名称"><Icon name="copy" className="w-3 h-3"/></button>
+                                                            </div>
+                                                            <div className="flex items-center justify-center gap-2 flex-wrap">
+                                                                <div className="text-[10px] text-gray-800 bg-gray-200 px-2 py-0.5 rounded font-mono select-all break-all border border-gray-300">{item.id}</div>
+                                                                <button onClick={(e) => {e.stopPropagation(); handleCopyText(item.id)}} className={`p-1 rounded hover:bg-gray-300 border border-gray-300 ${copyFeedback[item.id] ? 'text-green-700 bg-green-100 border-green-300' : 'text-gray-600 bg-gray-100'}`} title="复制ID">{copyFeedback[item.id] ? <Icon name="check"/> : <Icon name="copy"/>}</button>
+                                                            </div>
+                                                            <div className="flex gap-1 justify-center mt-1">
+                                                                {item.totalSpend === 0 && <div className="inline-block px-1.5 py-0.5 bg-green-100 text-green-700 text-[10px] rounded border border-green-200 font-bold"><Icon name="leaf" className="w-2.5 h-2.5 inline mr-0.5"/>纯自然流</div>}
+                                                                {item.isFuzzyMatched && <div className="inline-block px-1.5 py-0.5 bg-purple-100 text-purple-700 text-[10px] rounded border border-purple-200 font-bold" title="通过智能超级清洗匹配关联"><Icon name="shield" className="w-2.5 h-2.5 inline mr-0.5"/>超级清洗</div>}
+                                                            </div>
+                                                        </td>
+                                                        <td className="px-2 py-2 text-center border-l border-r border-indigo-200 bg-indigo-50/50 align-middle">
+                                                            <div className="flex flex-col items-center">
+                                                                <span className="text-2xl font-extrabold text-indigo-800">{Math.round(item.score)}</span>
+                                                                <span className={`text-[10px] px-2 py-0.5 rounded-full mt-1 border font-bold ${item.color} whitespace-nowrap`}>{item.level}</span>
+                                                            </div>
+                                                        </td>
+                                                        <td className="px-2 py-2 text-center align-middle border-r border-gray-100">
+                                                            <div className="flex flex-wrap gap-1 justify-center">
+                                                                {item.diagnosisTags.length > 0 ? (
+                                                                    item.diagnosisTags.map(tag => (
+                                                                        <span key={tag} className={`tag-badge ${getTagColor(tag)}`}>{tag}</span>
+                                                                    ))
+                                                                ) : (
+                                                                    <span className="text-xs text-gray-400">-</span>
+                                                                )}
+                                                            </div>
+                                                        </td>
+                                                        <td className={`px-2 py-2 text-center font-bold text-xs align-middle bg-red-50/30 border-r border-gray-100 ${item.refundRate > 0.2 ? 'text-red-600' : 'text-gray-600'}`}>{formatPercent(item.refundRate)}</td>
+                                                        <td className={`px-2 py-2 text-center font-extrabold bg-emerald-50/50 align-middle border-r border-emerald-200 text-sm ${item.realRoi < 3 ? 'text-red-600' : 'text-emerald-700'}`}>{item.realRoi > 900 ? '∞' : item.realRoi.toFixed(2)}</td>
+                                                        <td className="px-2 py-2 bg-orange-50/50 border-r border-gray-100 align-middle"><div className="flex items-center justify-center gap-1 text-orange-800 font-bold text-sm"><Icon name="users" className="w-3 h-3 text-orange-400"/><span>{item.totalOrders}</span></div></td>
+                                                        
+                                                        {/* 新位置：转化率 */}
+                                                        <td className="px-2 py-2 text-center text-gray-800 font-bold text-xs align-middle border-r border-gray-100">{item.cvr > 0 ? formatPercent(item.cvr) : '-'}</td>
+                                                        {/* 新位置：平均PPC */}
+                                                        <td className="px-2 py-2 text-center font-mono text-gray-600 font-medium text-xs align-middle border-r border-gray-200">{item.ppc > 0 ? formatCurrency(item.ppc) : '-'}</td>
+
+                                                        <td className="px-2 py-2 text-center text-gray-700 font-medium text-xs align-middle bg-gray-50/50 border-r border-gray-100">{item.keywordSpend > 0 ? item.keywordSpend.toFixed(2) : '-'}</td>
+                                                        <td className="px-2 py-2 text-center text-gray-700 font-medium text-xs align-middle bg-gray-50/50 border-r border-gray-100">{item.crowdSpend > 0 ? item.crowdSpend.toFixed(2) : '-'}</td>
+                                                        <td className="px-2 py-2 text-center text-gray-700 font-medium text-xs align-middle bg-gray-50/50 border-r border-gray-100">{item.allStationSpend > 0 ? item.allStationSpend.toFixed(2) : '-'}</td>
+                                                        
+                                                        {/* 新位置：总花费 */}
+                                                        <td className="px-2 py-2 text-center text-gray-900 font-extrabold align-middle text-sm border-l border-gray-200">{item.totalSpend > 0 ? formatCurrency(item.totalSpend) : '-'}</td>
+
+                                                        <td className="px-2 py-2 text-center text-gray-800 font-bold text-xs align-middle border-r border-gray-100">{Math.round(item.aov)}</td>
+                                                        <td className="px-2 py-2 text-center text-gray-800 font-bold text-xs align-middle">{formatCurrency(item.realGMV)}</td>
+                                                        <td className={`px-2 py-2 text-center font-mono align-middle font-bold ${item.epc < 1 ? 'text-red-600' : 'text-blue-700'}`}>{item.epc > 0 ? item.epc.toFixed(2) : '-'}</td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                    <div className="p-2 bg-gray-200 text-center text-sm text-gray-800 font-bold mt-2 rounded-lg shadow-sm border border-gray-300">
+                                        共筛选出 {filteredAndSortedData.length} 条数据 (当前已显示 {displayData.length} 条，下滑自动加载)
+                                    </div>
+                                </>
+                            ) : (
+                                <div className="text-center py-20 bg-white rounded-xl shadow-lg border border-gray-200">
+                                    <div className="bg-gray-100 p-6 rounded-full w-24 h-24 flex items-center justify-center mx-auto mb-4">
+                                        <Icon name="search" className="w-10 h-10 text-gray-400"/>
+                                    </div>
+                                    <h3 className="text-xl font-bold text-gray-700 mb-2">暂无分析数据</h3>
+                                    <p className="text-gray-500 mb-6">请先返回上传页面导入报表文件</p>
+                                    <button onClick={() => setActiveView('upload')} className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-full font-bold transition-all shadow-md">前往上传数据</button>
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
+
+
