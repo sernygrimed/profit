@@ -1,0 +1,581 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>模特赠品预览表</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&display=swap');
+        
+        body {
+            font-family: 'Noto Sans SC', 'SimHei', '黑体', 'Microsoft YaHei', sans-serif;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #f43f5e 0%, #e11d48 100%);
+            transition: all 0.3s ease;
+        }
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(244, 63, 94, 0.3);
+        }
+        
+        .btn-outline {
+            border: 2px solid #f43f5e;
+            color: #f43f5e;
+            transition: all 0.3s ease;
+        }
+        .btn-outline:hover {
+            background: #fff1f2;
+            transform: translateY(-2px);
+        }
+        
+        .btn-green {
+            background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+            transition: all 0.3s ease;
+        }
+        .btn-green:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(34, 197, 94, 0.3);
+        }
+        
+        .btn-blue {
+            background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+            transition: all 0.3s ease;
+        }
+        .btn-blue:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(59, 130, 246, 0.3);
+        }
+        
+        .btn-red {
+            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+            transition: all 0.3s ease;
+        }
+        .btn-red:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(239, 68, 68, 0.3);
+        }
+        
+        .card {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+        }
+        
+        .image-preview {
+            transition: all 0.3s ease;
+        }
+        .image-preview:hover {
+            transform: scale(1.02);
+        }
+        
+        .delete-btn {
+            opacity: 0;
+            transition: opacity 0.2s ease;
+        }
+        .image-container:hover .delete-btn {
+            opacity: 1;
+        }
+        
+        .quantity-input {
+            border: none;
+            background: transparent;
+            text-align: center;
+            width: 100%;
+            font-size: 14px;
+            outline: none;
+        }
+        .quantity-input:focus {
+            background: #fef2f2;
+            border-radius: 4px;
+        }
+        
+        table {
+            border-collapse: collapse;
+            width: 100%;
+        }
+        
+        td {
+            border: 2px solid #1f2937;
+            padding: 12px;
+            text-align: center;
+            vertical-align: middle;
+        }
+        
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255,255,255,.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 1s ease-in-out infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.8);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+        .modal.active {
+            display: flex;
+        }
+        .modal img {
+            max-width: 90%;
+            max-height: 90%;
+        }
+        .modal-close {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            color: white;
+            font-size: 30px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body class="min-h-screen" style="background: linear-gradient(135deg, #fdf2f8 0%, #ffe4e6 100%);">
+    <div class="max-w-7xl mx-auto p-4 md:p-8">
+        <!-- 标题 -->
+        <div class="text-center mb-8">
+            <h1 class="text-3xl md:text-4xl font-bold text-gray-800 mb-2">模特赠品预览表</h1>
+            <p class="text-gray-600">上传图片，填写数量，一键导出Excel和PNG</p>
+        </div>
+
+        <!-- 上传区域 -->
+        <div class="card mb-6 p-6">
+            <div class="flex flex-wrap gap-4 justify-center">
+                <input type="file" id="fileInput" accept="image/*" multiple class="hidden">
+                <input type="file" id="folderInput" webkitdirectory directory multiple class="hidden">
+                
+                <button onclick="document.getElementById('fileInput').click()" class="btn-primary text-white px-6 py-3 rounded-lg flex items-center gap-2">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                    选择图片
+                </button>
+                
+                <button onclick="document.getElementById('folderInput').click()" class="btn-outline px-6 py-3 rounded-lg flex items-center gap-2">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>
+                    上传文件夹
+                </button>
+                
+                <button id="exportExcelBtn" onclick="exportExcel()" class="btn-green text-white px-6 py-3 rounded-lg flex items-center gap-2 hidden">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                    <span id="excelText">导出Excel</span>
+                </button>
+                
+                <button id="exportPngBtn" onclick="exportPNG()" class="btn-blue text-white px-6 py-3 rounded-lg flex items-center gap-2 hidden">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                    <span id="pngText">导出PNG</span>
+                </button>
+                
+                <button id="clearBtn" onclick="clearAll()" class="btn-red text-white px-6 py-3 rounded-lg flex items-center gap-2 hidden">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                    清空
+                </button>
+            </div>
+            
+            <div id="imageCount" class="mt-4 text-center text-gray-600 hidden">
+                已上传 <span class="font-bold text-rose-600" id="countNum">0</span> 张图片
+            </div>
+        </div>
+
+        <!-- 预览表格 -->
+        <div id="previewArea" class="card shadow-xl overflow-hidden hidden">
+            <div class="p-4 md:p-8" id="tableContainer">
+                <div class="text-center mb-6">
+                    <h2 class="text-2xl font-bold text-gray-800">模特赠品预览表</h2>
+                </div>
+                <div class="overflow-x-auto">
+                    <table id="previewTable">
+                        <tbody id="tableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- 空状态 -->
+        <div id="emptyState" class="text-center py-20">
+            <div class="bg-white rounded-full w-24 h-24 mx-auto mb-6 flex items-center justify-center shadow-lg">
+                <svg class="w-12 h-12 text-rose-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>
+            </div>
+            <h3 class="text-xl font-semibold text-gray-700 mb-2">还没有上传图片</h3>
+            <p class="text-gray-500 mb-6">点击上方按钮上传图片或文件夹</p>
+            <button onclick="document.getElementById('fileInput').click()" class="btn-primary text-white px-6 py-3 rounded-lg flex items-center gap-2 mx-auto">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                添加图片
+            </button>
+        </div>
+    </div>
+
+    <!-- 图片预览弹窗 -->
+    <div id="imageModal" class="modal" onclick="closeModal()">
+        <span class="modal-close">&times;</span>
+        <img id="modalImage" src="" alt="预览">
+    </div>
+
+    <script>
+        let images = [];
+        const colsPerRow = 5;
+
+        function generateId() {
+            return Math.random().toString(36).substring(2, 9);
+        }
+
+        function formatNumber(index) {
+            return String(index + 1).padStart(2, '0');
+        }
+
+        function handleFiles(files) {
+            if (!files) return;
+            
+            const imageFiles = Array.from(files).filter(file => 
+                file.type.startsWith('image/')
+            );
+
+            const newImages = imageFiles.map(file => ({
+                id: generateId(),
+                file: file,
+                preview: URL.createObjectURL(file),
+                quantity: ''
+            }));
+
+            images = [...images, ...newImages];
+            updateUI();
+        }
+
+        function updateUI() {
+            const hasImages = images.length > 0;
+            
+            document.getElementById('exportExcelBtn').classList.toggle('hidden', !hasImages);
+            document.getElementById('exportPngBtn').classList.toggle('hidden', !hasImages);
+            document.getElementById('clearBtn').classList.toggle('hidden', !hasImages);
+            document.getElementById('imageCount').classList.toggle('hidden', !hasImages);
+            document.getElementById('previewArea').classList.toggle('hidden', !hasImages);
+            document.getElementById('emptyState').classList.toggle('hidden', hasImages);
+            
+            document.getElementById('countNum').textContent = images.length;
+            
+            if (hasImages) {
+                renderTable();
+            }
+        }
+
+        function renderTable() {
+            const tbody = document.getElementById('tableBody');
+            tbody.innerHTML = '';
+            
+            const rows = Math.ceil(images.length / colsPerRow);
+            
+            for (let row = 0; row < rows; row++) {
+                const rowImages = images.slice(row * colsPerRow, (row + 1) * colsPerRow);
+                
+                // 编号行
+                const numTr = document.createElement('tr');
+                numTr.innerHTML = `<td class="font-bold" style="width: 80px; background-color: #ffe4e6; color: #9d174d;">编号</td>`;
+                rowImages.forEach((_, idx) => {
+                    numTr.innerHTML += `<td class="font-bold" style="background-color: #fdf2f8;">${formatNumber(row * colsPerRow + idx)}</td>`;
+                });
+                for (let i = rowImages.length; i < colsPerRow; i++) {
+                    numTr.innerHTML += `<td></td>`;
+                }
+                tbody.appendChild(numTr);
+                
+                // 图片行
+                const imgTr = document.createElement('tr');
+                imgTr.innerHTML = `<td class="font-bold" style="background-color: #dbeafe; color: #1e40af;">图片</td>`;
+                rowImages.forEach((img) => {
+                    imgTr.innerHTML += `
+                        <td style="height: 150px;">
+                            <div class="image-container relative inline-block">
+                                <img src="${img.preview}" 
+                                     class="image-preview max-h-[130px] max-w-full cursor-pointer object-contain" 
+                                     onclick="openModal('${img.preview}')"
+                                     alt="图片">
+                                <button onclick="removeImage('${img.id}')" 
+                                        class="delete-btn absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-sm">
+                                    &times;
+                                </button>
+                            </div>
+                        </td>
+                    `;
+                });
+                for (let i = rowImages.length; i < colsPerRow; i++) {
+                    imgTr.innerHTML += `<td></td>`;
+                }
+                tbody.appendChild(imgTr);
+                
+                // 数量行
+                const qtyTr = document.createElement('tr');
+                qtyTr.innerHTML = `<td class="font-bold" style="background-color: #dcfce7; color: #166534;">数量</td>`;
+                rowImages.forEach((img) => {
+                    qtyTr.innerHTML += `
+                        <td>
+                            <input type="text" 
+                                   value="${img.quantity}" 
+                                   onchange="updateQuantity('${img.id}', this.value)"
+                                   placeholder="输入数量"
+                                   class="quantity-input">
+                        </td>
+                    `;
+                });
+                for (let i = rowImages.length; i < colsPerRow; i++) {
+                    qtyTr.innerHTML += `<td></td>`;
+                }
+                tbody.appendChild(qtyTr);
+            }
+        }
+
+        function removeImage(id) {
+            const img = images.find(i => i.id === id);
+            if (img) URL.revokeObjectURL(img.preview);
+            images = images.filter(i => i.id !== id);
+            updateUI();
+        }
+
+        function updateQuantity(id, value) {
+            const img = images.find(i => i.id === id);
+            if (img) img.quantity = value;
+        }
+
+        function clearAll() {
+            if (confirm('确定要清空所有图片吗？')) {
+                images.forEach(img => URL.revokeObjectURL(img.preview));
+                images = [];
+                updateUI();
+            }
+        }
+
+        function openModal(src) {
+            document.getElementById('modalImage').src = src;
+            document.getElementById('imageModal').classList.add('active');
+        }
+
+        function closeModal() {
+            document.getElementById('imageModal').classList.remove('active');
+        }
+
+        function fileToBase64(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result.split(',')[1]);
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+            });
+        }
+
+        // 获取图片尺寸
+        function getImageDimensions(file) {
+            return new Promise((resolve) => {
+                const img = new Image();
+                img.onload = () => {
+                    resolve({ width: img.width, height: img.height });
+                    URL.revokeObjectURL(img.src);
+                };
+                img.onerror = () => {
+                    resolve({ width: 100, height: 100 });
+                };
+                img.src = URL.createObjectURL(file);
+            });
+        }
+
+        async function exportExcel() {
+            if (images.length === 0) {
+                alert('请先上传图片');
+                return;
+            }
+
+            document.getElementById('excelText').innerHTML = '<span class="loading"></span>';
+            
+            try {
+                const rows = Math.ceil(images.length / colsPerRow);
+                const workbook = new ExcelJS.Workbook();
+                const worksheet = workbook.addWorksheet('模特赠品预览表');
+                
+                worksheet.getColumn(1).width = 12;
+                for (let i = 2; i <= colsPerRow + 1; i++) {
+                    worksheet.getColumn(i).width = 20;
+                }
+                
+                for (let row = 0; row < rows; row++) {
+                    const rowImages = images.slice(row * colsPerRow, (row + 1) * colsPerRow);
+                    const rowStartIndex = row * 3 + 1;
+                    
+                    // 编号行
+                    const numRow = worksheet.getRow(rowStartIndex);
+                    numRow.getCell(1).value = '编号';
+                    numRow.getCell(1).font = { bold: true, name: '黑体', size: 12 };
+                    numRow.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE4E6' } };
+                    numRow.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' };
+                    numRow.height = 30;
+                    
+                    rowImages.forEach((_, idx) => {
+                        const cell = numRow.getCell(idx + 2);
+                        cell.value = formatNumber(row * colsPerRow + idx);
+                        cell.font = { bold: true, name: '黑体', size: 11 };
+                        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFDF2F8' } };
+                        cell.alignment = { horizontal: 'center', vertical: 'middle' };
+                    });
+                    
+                    // 图片行
+                    const imgRow = worksheet.getRow(rowStartIndex + 1);
+                    imgRow.getCell(1).value = '图片';
+                    imgRow.getCell(1).font = { bold: true, name: '黑体', size: 12 };
+                    imgRow.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDBEAFE' } };
+                    imgRow.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' };
+                    imgRow.height = 120;
+                    
+                    // 数量行
+                    const qtyRow = worksheet.getRow(rowStartIndex + 2);
+                    qtyRow.getCell(1).value = '数量';
+                    qtyRow.getCell(1).font = { bold: true, name: '黑体', size: 12 };
+                    qtyRow.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDCFCE7' } };
+                    qtyRow.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' };
+                    qtyRow.height = 30;
+                    
+                    rowImages.forEach((img, idx) => {
+                        const qtyCell = qtyRow.getCell(idx + 2);
+                        qtyCell.value = img.quantity || '';
+                        qtyCell.font = { name: '黑体', size: 11 };
+                        qtyCell.alignment = { horizontal: 'center', vertical: 'middle' };
+                    });
+                    
+                    // 添加图片 - 使用绝对定位保持比例
+                    for (let col = 0; col < rowImages.length; col++) {
+                        const img = rowImages[col];
+                        const base64 = await fileToBase64(img.file);
+                        const imgDimensions = await getImageDimensions(img.file);
+                        
+                        let extension = 'png';
+                        if (img.file.type.includes('jpeg') || img.file.type.includes('jpg')) {
+                            extension = 'jpeg';
+                        } else if (img.file.type.includes('gif')) {
+                            extension = 'gif';
+                        }
+                        
+                        const imageId = workbook.addImage({
+                            base64: base64,
+                            extension: extension,
+                        });
+                        
+                        // 计算图片在单元格中的位置和大小，保持比例
+                        const colWidth = worksheet.getColumn(col + 2).width || 20;
+                        const rowHeight = 120;
+                        
+                        // 列宽转像素 (约7.5像素/字符宽度)
+                        const cellWidthPx = colWidth * 7.5;
+                        
+                        // 计算缩放比例，保持图片比例
+                        const scale = Math.min(
+                            cellWidthPx / imgDimensions.width,
+                            rowHeight / imgDimensions.height
+                        );
+                        
+                        const scaledWidth = Math.round(imgDimensions.width * scale);
+                        const scaledHeight = Math.round(imgDimensions.height * scale);
+                        
+                        // 计算居中偏移
+                        const offsetX = Math.max(0, (cellWidthPx - scaledWidth) / 2);
+                        const offsetY = Math.max(0, (rowHeight - scaledHeight) / 2);
+                        
+                        // 使用绝对定位方式插入图片
+                        const imgRow0Based = rowStartIndex;
+                        worksheet.addImage(imageId, {
+                            tl: { 
+                                col: col + 1, 
+                                row: imgRow0Based,
+                                nativeCol: col + 1,
+                                nativeColOff: Math.round(offsetX * 9525),
+                                nativeRow: imgRow0Based,
+                                nativeRowOff: Math.round(offsetY * 9525)
+                            },
+                            ext: {
+                                width: scaledWidth,
+                                height: scaledHeight
+                            },
+                            editAs: 'absolute'
+                        });
+                    }
+                }
+                
+                // 设置边框
+                for (let r = 1; r <= rows * 3; r++) {
+                    for (let c = 1; c <= colsPerRow + 1; c++) {
+                        const cell = worksheet.getCell(r, c);
+                        cell.border = {
+                            top: { style: 'medium', color: { argb: 'FF000000' } },
+                            left: { style: 'medium', color: { argb: 'FF000000' } },
+                            bottom: { style: 'medium', color: { argb: 'FF000000' } },
+                            right: { style: 'medium', color: { argb: 'FF000000' } }
+                        };
+                    }
+                }
+                
+                const buffer = await workbook.xlsx.writeBuffer();
+                const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+                saveAs(blob, '模特赠品预览表.xlsx');
+                
+            } catch (error) {
+                console.error('导出Excel失败:', error);
+                alert('导出失败，请重试');
+            } finally {
+                document.getElementById('excelText').textContent = '导出Excel';
+            }
+        }
+
+        async function exportPNG() {
+            if (images.length === 0) {
+                alert('请先上传图片');
+                return;
+            }
+
+            document.getElementById('pngText').innerHTML = '<span class="loading"></span>';
+            
+            try {
+                const element = document.getElementById('tableContainer');
+                const canvas = await html2canvas(element, {
+                    backgroundColor: '#ffffff',
+                    scale: 2,
+                    useCORS: true,
+                    allowTaint: true
+                });
+                
+                canvas.toBlob(blob => {
+                    saveAs(blob, '模特赠品预览表.png');
+                });
+                
+            } catch (error) {
+                console.error('导出PNG失败:', error);
+                alert('导出失败，请重试');
+            } finally {
+                document.getElementById('pngText').textContent = '导出PNG';
+            }
+        }
+
+        document.getElementById('fileInput').addEventListener('change', function(e) {
+            handleFiles(e.target.files);
+            this.value = '';
+        });
+
+        document.getElementById('folderInput').addEventListener('change', function(e) {
+            handleFiles(e.target.files);
+            this.value = '';
+        });
+    </script>
+</body>
+</html>
