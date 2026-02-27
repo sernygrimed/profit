@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>今日业绩分析系统</title>
+    <!-- 引入 Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 引入 React 和 ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <!-- 引入 Babel 转换 JSX -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <!-- 引入 Lucide 图标集 -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        body {
+            font-family: "SimSun", "Songti SC", "STSong", serif;
+            background-color: #f9fafb; /* bg-gray-50 */
+        }
+        /* 隐藏数字输入框的上下箭头 */
+        input[type=number]::-webkit-inner-spin-button, 
+        input[type=number]::-webkit-outer-spin-button { 
+            -webkit-appearance: none; 
+            margin: 0; 
+        }
+        input[type=number] {
+            -moz-appearance: textfield;
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        // 手动实现需要的几个 SVG 图标组件，避免依赖外部 React 组件库库
+        const IconCalculator = ({ className }) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><rect width="16" height="20" x="4" y="2" rx="2"/><line x1="8" x2="16" y1="6" y2="6"/><line x1="16" x2="16.01" y1="14" y2="14"/><line x1="16" x2="16.01" y1="18" y2="18"/><line x1="16" x2="16.01" y1="10" y2="10"/><line x1="12" x2="12.01" y1="14" y2="14"/><line x1="12" x2="12.01" y1="18" y2="18"/><line x1="12" x2="12.01" y1="10" y2="10"/><line x1="8" x2="8.01" y1="14" y2="14"/><line x1="8" x2="8.01" y1="18" y2="18"/><line x1="8" x2="8.01" y1="10" y2="10"/></svg>;
+        const IconStore = ({ className }) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="m2 7 4.41-4.41A2 2 0 0 1 7.83 2h8.34a2 2 0 0 1 1.42.59L22 7"/><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><path d="M15 22v-4a2 2 0 0 0-2-2h-2a2 2 0 0 0-2 2v4"/><path d="M2 7h20"/><path d="M22 7v3a2 2 0 0 1-2 2v0a2.7 2.7 0 0 1-1.59-.63.7.7 0 0 0-.82 0A2.7 2.7 0 0 1 16 12a2.7 2.7 0 0 1-1.59-.63.7.7 0 0 0-.82 0A2.7 2.7 0 0 1 12 12a2.7 2.7 0 0 1-1.59-.63.7.7 0 0 0-.82 0A2.7 2.7 0 0 1 8 12a2.7 2.7 0 0 1-1.59-.63.7.7 0 0 0-.82 0A2.7 2.7 0 0 1 4 12v0a2 2 0 0 1-2-2V7"/></svg>;
+        const IconCopy = ({ className }) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>;
+        const IconCheckCircle = ({ className }) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="m9 11 3 3L22 4"/></svg>;
+        const IconTrash2 = ({ className }) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>;
+        const IconPlus = ({ className }) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M5 12h14"/><path d="M12 5v14"/></svg>;
+
+        // 金额格式化：四舍五入，不保留小数点
+        const formatMoney = (num) => {
+            return Math.round(Number(num || 0)).toString();
+        };
+
+        // 剥离多余小数0，用于计算过程展示（如 ROI）
+        const stripZero = (num) => Number(num.toFixed(2));
+
+        function App() {
+            const [inputRows, setInputRows] = useState([
+                { id: '1', revenue: '', spend: '', monthlyCost: '50000' },
+                { id: '2', revenue: '', spend: '', monthlyCost: '10000' },
+                { id: '3', revenue: '', spend: '', monthlyCost: '4000' }
+            ]);
+            const [results, setResults] = useState([]);
+            const [totalMonthlyProfit, setTotalMonthlyProfit] = useState(0);
+            const [totalProfitText, setTotalProfitText] = useState("");
+            const [error, setError] = useState("");
+            const [copied, setCopied] = useState(false);
+
+            useEffect(() => {
+                handleCalculate();
+            }, []);
+
+            const handleRowChange = (index, field, value) => {
+                const newRows = [...inputRows];
+                newRows[index][field] = value;
+                setInputRows(newRows);
+            };
+
+            const addRow = () => {
+                const lastId = inputRows.length > 0 ? parseInt(inputRows[inputRows.length - 1].id) || 0 : 0;
+                const newId = lastId + 1;
+                
+                // 根据店铺ID匹配默认固定月成本
+                let defaultCost = '2000';
+                if (newId === 1) defaultCost = '50000';
+                else if (newId === 2) defaultCost = '10000';
+                else if (newId === 3) defaultCost = '4000';
+
+                setInputRows([...inputRows, { id: String(newId), revenue: '', spend: '', monthlyCost: defaultCost }]);
+            };
+
+            const removeRow = (index) => {
+                const newRows = inputRows.filter((_, i) => i !== index);
+                setInputRows(newRows);
+            };
+
+            const handleCopy = () => {
+                if (results.length === 0) return;
+
+                let textToCopy = "今日业绩分析\n\n";
+                results.forEach((store) => {
+                    textToCopy += `店铺 ${store.id}\n`;
+                    textToCopy += `名称\t结果\t计算过程\n`;
+                    store.tableRows.forEach((row) => {
+                        textToCopy += `${row.name}\t${row.result}\t${row.calc}\n`;
+                    });
+                    textToCopy += "\n";
+                });
+                textToCopy += `全店铺月预估总净利润\t${formatMoney(totalMonthlyProfit)}\t${totalProfitText}\n`;
+
+                const textArea = document.createElement("textarea");
+                textArea.value = textToCopy;
+                document.body.appendChild(textArea);
+                textArea.select();
+                try {
+                    document.execCommand('copy');
+                    setCopied(true);
+                    setTimeout(() => setCopied(false), 2000);
+                } catch (err) {
+                    console.error('复制失败', err);
+                }
+                document.body.removeChild(textArea);
+            };
+
+            const handleCalculate = () => {
+                setError("");
+                if (inputRows.length === 0) {
+                    setError("请添加店铺数据");
+                    setResults([]);
+                    return;
+                }
+
+                const newResults = [];
+                let totalProfit = 0;
+                let profitTextArr = [];
+
+                for (let i = 0; i < inputRows.length; i++) {
+                    const row = inputRows[i];
+                    // 忽略完全空行
+                    if (!row.id && !row.revenue && !row.spend && !row.monthlyCost) continue;
+
+                    const id = parseInt(row.id);
+                    const revenue = parseFloat(row.revenue);
+                    const spend = parseFloat(row.spend);
+                    const monthlyCost = parseFloat(row.monthlyCost);
+
+                    if (isNaN(id) || isNaN(revenue) || isNaN(spend) || isNaN(monthlyCost)) {
+                        setError(`第 ${i + 1} 行包含非数字或有空缺，请确保营业额、付费、月成本均已填写。`);
+                        return;
+                    }
+
+                    // 1. 日固定成本判定（直接由用户输入的月成本计算得出）
+                    const dailyCost = monthlyCost / 30;
+
+                    // 2. 核心公式计算
+                    const effectiveRevenue = revenue * (1 - 0.33);
+                    const vROI = spend > 0 ? revenue / spend : 0;
+                    const nROI = spend > 0 ? effectiveRevenue / spend : 0;
+                    const grossProfit = effectiveRevenue * 0.55;
+                    const netProfit = grossProfit - spend - dailyCost;
+                    const monthlyNetProfit = netProfit * 30;
+
+                    // 3. 业绩评分计算
+                    let score = 0;
+                    let level = "";
+                    let scoreCalc = "";
+
+                    if (vROI < 6.0) {
+                        score = Math.min(vROI * 10, 59);
+                        level = "不合格";
+                        scoreCalc = `min(${stripZero(vROI)}×10, 59)`;
+                    } else if (vROI < 6.8) {
+                        score = 60 + (vROI - 6.0) * 30;
+                        level = "合格";
+                        scoreCalc = `60 + (${stripZero(vROI)} - 6.0)×30`;
+                    } else if (vROI < 8.5) {
+                        score = 90 + (vROI - 6.8) * 5;
+                        level = "合格";
+                        scoreCalc = `90 + (${stripZero(vROI)} - 6.8)×5`;
+                    } else {
+                        score = 96 + (vROI - 8.6) * 4;
+                        level = "优秀";
+                        scoreCalc = `96 + (${stripZero(vROI)} - 8.6)×4`;
+                    }
+                    
+                    score = Math.min(score, 100);
+
+                    // 4. 将该店数据映射为严谨的12行报表结构
+                    const tableRows = [
+                        { name: "今日营业额", result: `${formatMoney(revenue)}`, calc: "/" },
+                        { name: "今日付费", result: `${formatMoney(spend)}`, calc: "/" },
+                        { name: "月固定成本", result: `${formatMoney(monthlyCost)}`, calc: "/" },
+                        { name: "日固定成本", result: `${formatMoney(dailyCost)}`, calc: `${formatMoney(monthlyCost)}÷30` },
+                        { name: "有效营业额", result: `${formatMoney(effectiveRevenue)}`, calc: `${formatMoney(revenue)}×(1 - 33%)` },
+                        { name: "今日虚投产（虚 ROI）", result: `${vROI.toFixed(2)}`, calc: `${formatMoney(revenue)}÷${formatMoney(spend)}`, isVROI: true, val: vROI },
+                        { name: "今日净投产（净 ROI）", result: `${nROI.toFixed(2)}`, calc: `${formatMoney(effectiveRevenue)}÷${formatMoney(spend)}`, isNROI: true, val: nROI },
+                        { name: "毛利额", result: `${formatMoney(grossProfit)}`, calc: `${formatMoney(effectiveRevenue)}×55%` },
+                        { 
+                            name: "今日净利润", 
+                            result: `${formatMoney(netProfit)}`, 
+                            calc: `${formatMoney(grossProfit)} - ${formatMoney(spend)} - ${formatMoney(dailyCost)}`,
+                            isProfit: true, val: netProfit
+                        },
+                        { 
+                            name: "月预估净利润", 
+                            result: `${formatMoney(monthlyNetProfit)}`, 
+                            calc: `${formatMoney(netProfit)}×30`,
+                            isProfit: true, val: monthlyNetProfit
+                        },
+                        { name: "今日业绩评分", result: `${score.toFixed(0)} 分`, calc: scoreCalc + "（四舍五入后）", isScore: true, val: score },
+                        { name: "业绩等级", result: level, calc: "/", isLevel: true, val: level }
+                    ];
+
+                    newResults.push({ id, tableRows });
+
+                    totalProfit += monthlyNetProfit;
+                    profitTextArr.push(`店铺${id}月预估`);
+                }
+
+                setResults(newResults);
+                setTotalMonthlyProfit(totalProfit);
+                setTotalProfitText(profitTextArr.join(" + "));
+            };
+
+            const getLevelColor = (level) => {
+                if (level === '优秀') return 'text-green-600 font-bold';
+                if (level === '合格') return 'text-blue-600 font-bold';
+                return 'text-red-600 font-bold';
+            };
+
+            return (
+                <div className="min-h-screen p-4 sm:p-6 lg:p-8 text-gray-900">
+                    <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-6">
+                        
+                        {/* 左侧：输入区 */}
+                        <div className="lg:col-span-4 space-y-4">
+                            <div className="bg-white rounded border border-gray-300 shadow-sm p-4">
+                                <h2 className="text-base font-bold text-gray-800 mb-4 flex items-center gap-2 border-b pb-2">
+                                    <IconCalculator className="w-5 h-5 text-gray-700" /> 数据录入
+                                </h2>
+                                
+                                <div className="space-y-2 mb-4 max-h-[60vh] overflow-y-auto pr-1">
+                                    <div className="flex gap-2 text-xs font-bold text-gray-600 mb-1 px-1">
+                                        <div className="w-[15%]">编号</div>
+                                        <div className="w-[25%]">营业额</div>
+                                        <div className="w-[25%]">付费</div>
+                                        <div className="w-[25%]">月成本</div>
+                                        <div className="w-[10%]"></div>
+                                    </div>
+                                    
+                                    {inputRows.map((row, index) => (
+                                        <div key={index} className="flex gap-2 items-center">
+                                            <div className="w-[15%]">
+                                                <input
+                                                    type="number"
+                                                    value={row.id}
+                                                    onChange={(e) => handleRowChange(index, 'id', e.target.value)}
+                                                    className="w-full p-2 border border-gray-300 rounded focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none text-sm transition-all"
+                                                    placeholder="编号"
+                                                />
+                                            </div>
+                                            <div className="w-[25%]">
+                                                <input
+                                                    type="number"
+                                                    value={row.revenue}
+                                                    onChange={(e) => handleRowChange(index, 'revenue', e.target.value)}
+                                                    className="w-full p-2 border border-gray-300 rounded focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none text-sm transition-all"
+                                                    placeholder="营业额"
+                                                />
+                                            </div>
+                                            <div className="w-[25%]">
+                                                <input
+                                                    type="number"
+                                                    value={row.spend}
+                                                    onChange={(e) => handleRowChange(index, 'spend', e.target.value)}
+                                                    className="w-full p-2 border border-gray-300 rounded focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none text-sm transition-all"
+                                                    placeholder="付费"
+                                                />
+                                            </div>
+                                            <div className="w-[25%]">
+                                                <input
+                                                    type="number"
+                                                    value={row.monthlyCost}
+                                                    onChange={(e) => handleRowChange(index, 'monthlyCost', e.target.value)}
+                                                    className="w-full p-2 border border-gray-300 rounded focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none text-sm transition-all"
+                                                    placeholder="月成本"
+                                                />
+                                            </div>
+                                            <div className="w-[10%] flex justify-center">
+                                                <button
+                                                    onClick={() => removeRow(index)}
+                                                    className="text-gray-400 hover:text-red-500 transition-colors p-1"
+                                                    title="删除"
+                                                >
+                                                    <IconTrash2 className="w-4 h-4" />
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+
+                                <button
+                                    onClick={addRow}
+                                    className="w-full border border-dashed border-gray-300 text-gray-500 hover:text-blue-600 hover:border-blue-400 hover:bg-blue-50 font-medium py-2 rounded transition-colors text-sm flex justify-center items-center gap-1 mb-4"
+                                >
+                                    <IconPlus className="w-4 h-4" /> 添加店铺
+                                </button>
+
+                                {error && (
+                                    <div className="mb-4 text-red-600 text-sm py-2 bg-red-50 px-3 rounded border border-red-100">{error}</div>
+                                )}
+                                <button
+                                    onClick={handleCalculate}
+                                    className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-4 rounded transition-colors shadow-sm"
+                                >
+                                    生成报表
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* 右侧：报表区 */}
+                        <div className="lg:col-span-8 space-y-6">
+                            {results.length > 0 ? (
+                                <div className="bg-white border border-gray-300 shadow-sm p-6 relative">
+                                    <div className="flex justify-between items-center mb-8 border-b pb-4">
+                                        <h1 className="text-2xl font-bold text-gray-900 tracking-wider">今日业绩分析</h1>
+                                        <button
+                                            onClick={handleCopy}
+                                            className={`flex items-center gap-2 px-3 py-1.5 rounded transition-colors ${
+                                                copied ? 'bg-green-100 text-green-700 border border-green-300' : 'bg-gray-100 text-gray-700 border border-gray-300 hover:bg-gray-200'
+                                            }`}
+                                        >
+                                            {copied ? <IconCheckCircle className="w-4 h-4" /> : <IconCopy className="w-4 h-4" />}
+                                            <span className="text-sm font-bold">{copied ? '已复制' : '一键复制'}</span>
+                                        </button>
+                                    </div>
+
+                                    <div className="space-y-10">
+                                        {results.map((store) => (
+                                            <div key={store.id} className="space-y-3">
+                                                <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2 px-1">
+                                                    <IconStore className="w-5 h-5 text-gray-600" />
+                                                    店铺 {store.id}
+                                                </h3>
+                                                
+                                                {/* 严谨的排版表格 */}
+                                                <div className="border border-gray-300 rounded-sm overflow-hidden">
+                                                    <table className="min-w-full text-sm text-left border-collapse">
+                                                        <thead className="bg-gray-100 border-b border-gray-300">
+                                                            <tr>
+                                                                <th className="px-4 py-3 font-bold text-gray-700 w-1/4 border-r border-gray-300 whitespace-nowrap">名称</th>
+                                                                <th className="px-4 py-3 font-bold text-gray-700 w-[30%] border-r border-gray-300">结果</th>
+                                                                <th className="px-4 py-3 font-bold text-gray-700">计算过程</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody className="divide-y divide-gray-200">
+                                                            {store.tableRows.map((row, idx) => (
+                                                                <tr key={idx} className="hover:bg-gray-50 transition-colors">
+                                                                    {/* 列1：名称 */}
+                                                                    <td className={`px-4 py-2.5 font-medium border-r border-gray-200 whitespace-nowrap ${
+                                                                        row.isVROI || row.isNROI ? 'text-yellow-600 font-bold' : 'text-gray-800'
+                                                                    }`}>
+                                                                        {row.name}
+                                                                    </td>
+                                                                    {/* 列2：结果 */}
+                                                                    <td className="px-4 py-2.5 text-gray-900 border-r border-gray-200">
+                                                                        <span className={`
+                                                                            ${row.isProfit && row.val > 0 ? 'text-green-700 font-bold' : ''}
+                                                                            ${row.isProfit && row.val < 0 ? 'text-red-600 font-bold' : ''}
+                                                                            ${row.isLevel ? getLevelColor(row.val) : ''}
+                                                                            ${row.isVROI ? (row.val < 6 ? 'text-red-600 font-bold' : 'text-green-600 font-bold') : ''}
+                                                                            ${row.isNROI ? (row.val < 4.5 ? 'text-red-600 font-bold' : 'text-green-600 font-bold') : ''}
+                                                                            ${row.isScore && row.val < 60 ? 'text-red-600 font-bold' : ''}
+                                                                        `}>
+                                                                            {row.result}
+                                                                        </span>
+                                                                    </td>
+                                                                    {/* 列3：过程 */}
+                                                                    <td className="px-4 py-2.5 text-gray-600 text-xs tracking-tight">
+                                                                        {row.calc}
+                                                                    </td>
+                                                                </tr>
+                                                            ))}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+
+                                    {/* 底部汇总行 */}
+                                    <div className="mt-10 pt-6 border-t border-gray-300">
+                                        <table className="min-w-full text-sm text-left border-collapse border border-gray-300 bg-gray-50">
+                                            <tbody>
+                                                <tr>
+                                                    <td className="px-4 py-4 font-bold text-gray-900 w-1/4 border-r border-gray-300 whitespace-nowrap">
+                                                        全店铺月预估总净利润
+                                                    </td>
+                                                    <td className="px-4 py-4 w-[30%] border-r border-gray-300">
+                                                        <span className={`text-lg font-bold ${totalMonthlyProfit >= 0 ? 'text-green-700' : 'text-red-600'}`}>
+                                                            {formatMoney(totalMonthlyProfit)}
+                                                        </span>
+                                                    </td>
+                                                    <td className="px-4 py-4 text-gray-600 text-xs">
+                                                        {totalProfitText}
+                                                    </td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+
+                                </div>
+                            ) : (
+                                <div className="h-full min-h-[400px] border border-dashed border-gray-300 flex items-center justify-center text-gray-400 bg-white rounded">
+                                    <div className="text-center">
+                                        <IconCalculator className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+                                        <p>在左侧输入数据并点击“生成”，报表将在此处展示。</p>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                    </div>
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
