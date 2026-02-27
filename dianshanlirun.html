@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+ <meta charset="UTF-8">
+ <meta name="viewport" content="width=device-width, initial-scale=1.0">
+ <title>电商智能利润模型 - 店铺独立版</title>
+
+ <!-- 1. 引入 Tailwind CSS (样式引擎) -->
+ <script src="https://cdn.tailwindcss.com"></script>
+
+ <!-- 2. 引入 React 和 ReactDOM (核心框架) -->
+ <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+ <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+
+ <!-- 3. 引入 Babel (用于在浏览器中运行 JSX) -->
+ <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+ <!-- 4. 字体设置 & 动画 -->
+ <style>
+ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif; }
+ .fade-in { animation: fadeIn 0.5s ease-in-out; }
+ @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+ /* 隐藏数字输入框的箭头 */
+ input[type=number]::-webkit-inner-spin-button, 
+ input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+ </style>
+</head>
+<body class="bg-slate-50 text-slate-800 antialiased">
+
+ <div id="root"></div>
+
+ <script type="text/babel">
+ const { useState, useEffect } = React;
+
+ // --- 图标组件 (增加 size 参数以便复用) ---
+ const Icons = {
+ Calculator: ({size=24, className=''}) => <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="16" height="20" x="4" y="2" rx="2"/><line x1="8" x2="16" y1="6" y2="6"/><line x1="16" x2="16" y1="14" y2="18"/><path d="M16 10h.01"/><path d="M12 10h.01"/><path d="M8 10h.01"/><path d="M12 14h.01"/><path d="M8 14h.01"/><path d="M12 18h.01"/><path d="M8 18h.01"/></svg>,
+ Plus: ({size=24, className=''}) => <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>,
+ Trash2: ({size=24, className=''}) => <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>,
+ TrendingUp: ({size=24, className=''}) => <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>,
+ TrendingDown: ({size=24, className=''}) => <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 17 13.5 8.5 8.5 13.5 2 7"/><polyline points="16 17 22 17 22 11"/></svg>,
+ Store: ({size=24, className=''}) => <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m2 7 4.41-4.41A2 2 0 0 1 7.83 2h8.34a2 2 0 0 1 1.42.59L22 7"/><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><path d="M15 22v-4a2 2 0 0 0-2-2h-2a2 2 0 0 0-2 2v4"/><path d="M2 7h20"/><path d="M22 7v3a2 2 0 0 1-2 2v0a2.7 2.7 0 0 1-1.59-.63.7.7 0 0 0-.82 0A2.7 2.7 0 0 1 16 12a2.7 2.7 0 0 1-1.59-.63.7.7 0 0 0-.82 0A2.7 2.7 0 0 1 12 12a2.7 2.7 0 0 1-1.59-.63.7.7 0 0 0-.82 0A2.7 2.7 0 0 1 8 12a2.7 2.7 0 0 1-1.59-.63.7.7 0 0 0-.82 0A2.7 2.7 0 0 1 4 12v0a2 2 0 0 1-2-2V7"/></svg>,
+ Settings: ({size=24, className=''}) => <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.47a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.35a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>,
+ ArrowRightLeft: ({size=24, className=''}) => <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m16 3 4 4-4 4"/><path d="M20 7H4"/><path d="m8 21-4-4 4-4"/><path d="M4 17h16"/></svg>
+ };
+
+ const DynamicProfitCalculator = () => {
+ // 默认参数常量
+ const DEFAULT_PARAMS = {
+ grossMargin: 55, // 默认 55%
+ refundRate: 35   // 默认 35%
+ };
+
+ // 1. 店铺数据 State
+ const DEFAULT_STORES = [
+ { id: 1, name: '店铺 1', fixedCost: 50000, dailyAdSpend: 3000, adSpendPercent: 14, dailyRevenue: 21429, grossMargin: 55, refundRate: 35 },
+ { id: 2, name: '店铺 2', fixedCost: 10000, dailyAdSpend: 1000, adSpendPercent: 15, dailyRevenue: 6667, grossMargin: 55, refundRate: 35 },
+ ];
+ const [stores, setStores] = useState(DEFAULT_STORES);
+
+ // 2. 大盘汇总数据 (同时包含日/月)
+ const [summary, setSummary] = useState({ totalDailyNet: 0, totalDailyRev: 0, totalMonthlyNet: 0, totalMonthlyRev: 0 });
+
+ // 格式化金额
+ const formatMoney = (amount) => Math.round(amount).toLocaleString('zh-CN');
+
+ // 核心计算函数 
+ const calculateStoreMetrics = (store) => {
+ const dailyAdSpend = parseFloat(store.dailyAdSpend) || 0;
+ const dailyRevenue = parseFloat(store.dailyRevenue) || 0;
+ const adSpendPercent = parseFloat(store.adSpendPercent) || 0;
+ const fixedCostMonth = parseFloat(store.fixedCost) || 0;
+
+ // 获取当前店铺的配置参数，如果没有则使用默认值
+ const currentGrossMargin = store.grossMargin !== undefined ? parseFloat(store.grossMargin) : DEFAULT_PARAMS.grossMargin;
+ const currentRefundRate = store.refundRate !== undefined ? parseFloat(store.refundRate) : DEFAULT_PARAMS.refundRate;
+
+ // 计算有效毛利率: 毛利 * (1 - 退款率)
+ const effectiveRate = (currentGrossMargin / 100) * (1 - currentRefundRate / 100);
+
+ // 1. 有效毛利 (基于独立输入的日营业额)
+ const effectiveGrossProfitDay = dailyRevenue * effectiveRate;
+
+ // 2. 日固定成本
+ const dailyFixedCost = fixedCostMonth / 30;
+
+ // 3. 日净利润
+ const dailyNetProfit = effectiveGrossProfitDay - dailyAdSpend - dailyFixedCost;
+
+ // 4. 计算 ROI (营业额 / 付费)
+ const roi = dailyAdSpend > 0 ? (dailyRevenue / dailyAdSpend).toFixed(2) : '0.00';
+
+ return {
+ params: {
+ effectiveRate
+ },
+ roi,
+ daily: {
+ revenue: dailyRevenue,
+ fixedCost: dailyFixedCost,
+ adSpend: dailyAdSpend,
+ grossProfit: effectiveGrossProfitDay,
+ netProfit: dailyNetProfit
+ },
+ monthly: {
+ revenue: dailyRevenue * 30,
+ fixedCost: fixedCostMonth,
+ adSpend: dailyAdSpend * 30,
+ grossProfit: effectiveGrossProfitDay * 30,
+ netProfit: dailyNetProfit * 30
+ }
+ };
+ };
+
+ const updateStore = (id, field, value) => {
+ // 限制常规百分比输入在 0-100 之间 (去除 adSpendPercent 的硬性 100 限制，因为亏损极端情况可能超过 100%)
+ let validatedValue = value;
+ if (field === 'grossMargin' || field === 'refundRate') {
+ let numVal = parseFloat(value);
+ if (numVal < 0) numVal = 0;
+ if (numVal > 100) numVal = 100;
+ validatedValue = isNaN(numVal) && value !== '' ? '' : (isNaN(numVal) ? value : numVal);
+ } else if (field === 'adSpendPercent') {
+ let numVal = parseFloat(value);
+ if (numVal < 0) numVal = 0;
+ validatedValue = isNaN(numVal) && value !== '' ? '' : (isNaN(numVal) ? value : numVal);
+ }
+
+ setStores(stores.map(store => {
+ if (store.id !== id) return store;
+ 
+ let newStore = { ...store, [field]: validatedValue };
+ 
+ // --- 核心逻辑: 日营业额 与 付费占比 的双向同步反推 ---
+ const numValue = parseFloat(validatedValue) || 0;
+ const currentAdSpend = parseFloat(newStore.dailyAdSpend) || 0;
+
+ if (field === 'adSpendPercent') {
+   if (validatedValue === '') {
+     newStore.dailyRevenue = ''; // 允许留空以方便重新输入
+   } else if (numValue > 0 && currentAdSpend > 0) {
+     newStore.dailyRevenue = Math.round(currentAdSpend / (numValue / 100));
+   } else {
+     newStore.dailyRevenue = 0;
+   }
+ } else if (field === 'dailyRevenue') {
+   if (validatedValue === '') {
+     newStore.adSpendPercent = ''; 
+   } else if (numValue > 0 && currentAdSpend > 0) {
+     newStore.adSpendPercent = ((currentAdSpend / numValue) * 100).toFixed(2);
+   } else {
+     newStore.adSpendPercent = 0;
+   }
+ } else if (field === 'dailyAdSpend') {
+   if (validatedValue === '') {
+     newStore.dailyRevenue = 0;
+   } else {
+     const currentPct = parseFloat(newStore.adSpendPercent) || 0;
+     if (currentPct > 0) {
+       newStore.dailyRevenue = Math.round(numValue / (currentPct / 100));
+     }
+   }
+ }
+ 
+ return newStore;
+ }));
+ };
+
+ const addStore = () => {
+ const newId = stores.length > 0 ? Math.max(...stores.map(s => s.id)) + 1 : 1;
+ setStores([...stores, {
+ id: newId,
+ name: `店铺 ${newId}`,
+ fixedCost: 10000, 
+ dailyAdSpend: 1000, // 默认给 1000 的花费，方便即时算出 revenue
+ adSpendPercent: 15,
+ dailyRevenue: 6667, // 对应 15% 算出的默认日营业额
+ grossMargin: DEFAULT_PARAMS.grossMargin, 
+ refundRate: DEFAULT_PARAMS.refundRate    
+ }]);
+ };
+
+ const removeStore = (id) => {
+ setStores(stores.filter(store => store.id !== id));
+ };
+
+ useEffect(() => {
+ let totalDailyNet = 0;
+ let totalDailyRev = 0;
+ let totalMonthlyNet = 0;
+ let totalMonthlyRev = 0;
+
+ stores.forEach(store => {
+ const metrics = calculateStoreMetrics(store);
+ totalDailyNet += metrics.daily.netProfit;
+ totalDailyRev += metrics.daily.revenue;
+ totalMonthlyNet += metrics.monthly.netProfit;
+ totalMonthlyRev += metrics.monthly.revenue;
+ });
+
+ setSummary({ totalDailyNet, totalDailyRev, totalMonthlyNet, totalMonthlyRev });
+ }, [stores]);
+
+ return (
+ <div className="min-h-screen p-4 md:p-8">
+ <div className="max-w-6xl mx-auto fade-in">
+
+ {/* Header */}
+ <header className="mb-8">
+ <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
+ <h1 className="text-3xl font-bold text-slate-900 flex items-center gap-2">
+ <span className="text-blue-600"><Icons.Calculator /></span>
+ 电商智能利润模型
+ </h1>
+ <div className="text-sm text-slate-500 flex items-center gap-1 bg-white px-3 py-1.5 rounded-full border border-slate-200 shadow-sm">
+ <span className="relative flex h-2 w-2">
+ <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+ <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+ </span>
+ 全局视角（日/月数据自动映射）
+ </div>
+ </div>
+
+ {/* Summary Dashboard - Split into Daily and Monthly */}
+ <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+ {/* Daily Dashboard */}
+ <div className="bg-gradient-to-br from-blue-50 to-white rounded-2xl p-6 shadow-sm border border-blue-100 flex flex-col justify-between">
+ <div className="text-sm font-bold text-blue-800 mb-4 opacity-80 uppercase tracking-wider">大盘汇总 (日)</div>
+ <div className="flex justify-between items-end gap-4">
+ <div className="flex-1">
+ <div className="text-xs text-slate-500 mb-1">总营业额 (估算)</div>
+ <div className="text-3xl font-bold text-slate-800 tracking-tight truncate">¥{formatMoney(summary.totalDailyRev)}</div>
+ </div>
+ <div className="flex-1 text-right">
+ <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">总净利润</div>
+ <div className={`text-3xl font-extrabold flex items-center justify-end gap-1 ${summary.totalDailyNet >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+ {summary.totalDailyNet >= 0 ? <Icons.TrendingUp size={24} /> : <Icons.TrendingDown size={24} />}
+ ¥{formatMoney(summary.totalDailyNet)}
+ </div>
+ </div>
+ </div>
+ </div>
+
+ {/* Monthly Dashboard */}
+ <div className="bg-gradient-to-br from-purple-50 to-white rounded-2xl p-6 shadow-sm border border-purple-100 flex flex-col justify-between">
+ <div className="text-sm font-bold text-purple-800 mb-4 opacity-80 uppercase tracking-wider">大盘预测 (月 ×30)</div>
+ <div className="flex justify-between items-end gap-4">
+ <div className="flex-1">
+ <div className="text-xs text-slate-500 mb-1">总营业额 (估算)</div>
+ <div className="text-3xl font-bold text-slate-800 tracking-tight truncate">¥{formatMoney(summary.totalMonthlyRev)}</div>
+ </div>
+ <div className="flex-1 text-right">
+ <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">总净利润</div>
+ <div className={`text-3xl font-extrabold flex items-center justify-end gap-1 ${summary.totalMonthlyNet >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+ {summary.totalMonthlyNet >= 0 ? <Icons.TrendingUp size={24} /> : <Icons.TrendingDown size={24} />}
+ ¥{formatMoney(summary.totalMonthlyNet)}
+ </div>
+ </div>
+ </div>
+ </div>
+ </div>
+ </header>
+
+ {/* Stores Grid */}
+ <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+ {stores.map((store) => {
+ const metrics = calculateStoreMetrics(store);
+
+ return (
+ <div key={store.id} className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden hover:shadow-md transition-shadow duration-300 relative group flex flex-col">
+
+ {/* Card Title */}
+ <div className="bg-slate-50 px-6 py-4 border-b border-slate-200 flex justify-between items-center">
+ <div className="flex items-center gap-2 font-bold text-slate-700">
+ <span className="text-slate-400"><Icons.Store /></span>
+ <input 
+ type="text" value={store.name} onChange={(e) => updateStore(store.id, 'name', e.target.value)}
+ className="bg-transparent border-none focus:ring-0 p-0 font-bold text-slate-700 w-40 truncate outline-none hover:text-blue-600 transition-colors"
+ />
+ </div>
+ {stores.length > 1 && (
+ <button onClick={() => removeStore(store.id)} className="text-slate-400 hover:text-red-500 transition-colors p-1 rounded hover:bg-red-50"><Icons.Trash2 /></button>
+ )}
+ </div>
+
+ <div className="p-6 flex-1 flex flex-col">
+ {/* Section 1: Product Strategy (Margin & Refund) */}
+ <div className="mb-4">
+ <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-1">
+ <Icons.Settings size={14}/> 产品策略参数
+ </div>
+ <div className="grid grid-cols-2 gap-4 bg-orange-50/50 p-3 rounded-xl border border-orange-100/50">
+ <div>
+ <label className="block text-xs font-medium text-slate-500 mb-1">产品毛利率 (%)</label>
+ <div className="relative">
+ <input type="number" value={store.grossMargin} onChange={(e) => updateStore(store.id, 'grossMargin', e.target.value)} className="w-full pl-3 pr-6 py-1.5 bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-orange-400 font-bold text-slate-700 outline-none" />
+ <span className="absolute right-2 top-1.5 text-slate-400">%</span>
+ </div>
+ </div>
+ <div>
+ <label className="block text-xs font-medium text-slate-500 mb-1">平均退款率 (%)</label>
+ <div className="relative">
+ <input type="number" value={store.refundRate} onChange={(e) => updateStore(store.id, 'refundRate', e.target.value)} className="w-full pl-3 pr-6 py-1.5 bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-orange-400 font-bold text-slate-700 outline-none" />
+ <span className="absolute right-2 top-1.5 text-slate-400">%</span>
+ </div>
+ </div>
+ </div>
+ <div className="text-[10px] text-right text-slate-400 mt-1 mr-1">
+ 当前有效毛利: {((metrics.params.effectiveRate)*100).toFixed(2)}%
+ </div>
+ </div>
+
+ {/* Section 2: Operational Inputs */}
+ <div className="mb-6">
+ <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 flex items-center justify-between">
+ <span>核心运营指标</span>
+ <span className="text-[10px] bg-blue-50 text-blue-500 px-2 py-0.5 rounded flex items-center gap-1">
+ <Icons.ArrowRightLeft size={10} /> 营业额与占比可互相反推
+ </span>
+ </div>
+ <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+ <div>
+ <label className="block text-xs font-medium text-slate-500 mb-1 flex items-center justify-between">
+ 日营业额 (¥)
+ <Icons.ArrowRightLeft size={12} className="text-blue-400 opacity-60" />
+ </label>
+ <input type="number" value={store.dailyRevenue} onChange={(e) => updateStore(store.id, 'dailyRevenue', e.target.value)} className="w-full px-3 py-1.5 bg-blue-50/40 border border-blue-200/60 rounded-md focus:ring-2 focus:ring-blue-500 font-bold text-blue-700 outline-none text-sm transition-colors" placeholder="0" />
+ </div>
+ <div>
+ <label className="block text-xs font-medium text-slate-500 mb-1">日付费金额 (¥)</label>
+ <input type="number" value={store.dailyAdSpend} onChange={(e) => updateStore(store.id, 'dailyAdSpend', e.target.value)} className="w-full px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-md focus:ring-2 focus:ring-blue-500 font-medium outline-none text-sm" placeholder="0" />
+ </div>
+ <div>
+ <label className="block text-xs font-medium text-slate-500 mb-1 flex items-center justify-between">
+ 付费占比 (%)
+ <Icons.ArrowRightLeft size={12} className="text-blue-400 opacity-60" />
+ </label>
+ <div className="relative">
+ <input type="number" value={store.adSpendPercent} onChange={(e) => updateStore(store.id, 'adSpendPercent', e.target.value)} className="w-full pl-3 pr-6 py-1.5 bg-blue-50/40 border border-blue-200/60 rounded-md focus:ring-2 focus:ring-blue-500 font-bold text-blue-700 outline-none text-sm transition-colors" placeholder="15" />
+ <span className="absolute right-2 top-1.5 text-blue-400 text-xs font-bold">%</span>
+ </div>
+ </div>
+ <div>
+ <label className="block text-xs font-medium text-slate-500 mb-1">月固定成本</label>
+ <input type="number" value={store.fixedCost} onChange={(e) => updateStore(store.id, 'fixedCost', e.target.value)} className="w-full px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-md focus:ring-2 focus:ring-blue-500 font-medium outline-none text-sm" placeholder="10000" />
+ </div>
+ </div>
+ </div>
+
+ {/* Results Section (Unified Daily & Monthly Table) */}
+ <div className="mt-auto bg-slate-50 rounded-xl p-4 border border-slate-100">
+ <h4 className="text-xs font-bold text-slate-400 mb-3 uppercase tracking-wider">指标核算对比</h4>
+ 
+ {/* Table Header */}
+ <div className="grid grid-cols-3 gap-2 text-xs font-medium text-slate-500 border-b border-slate-200 pb-2 mb-3">
+ <div>数据项</div>
+ <div className="text-right text-blue-600/70">日维度</div>
+ <div className="text-right text-purple-600/70">月维度 (×30)</div>
+ </div>
+
+ {/* Table Body */}
+ <div className="grid grid-cols-3 gap-y-3 text-sm mb-4">
+ <div className="text-slate-600">营业额</div>
+ <div className="text-right font-semibold text-slate-800">¥{formatMoney(metrics.daily.revenue)}</div>
+ <div className="text-right font-semibold text-slate-800">¥{formatMoney(metrics.monthly.revenue)}</div>
+
+ <div className="text-slate-600">固定成本分摊</div>
+ <div className="text-right font-semibold text-slate-800">¥{formatMoney(metrics.daily.fixedCost)}</div>
+ <div className="text-right font-semibold text-slate-800">¥{formatMoney(metrics.monthly.fixedCost)}</div>
+
+ <div className="text-slate-600">有效毛利</div>
+ <div className="text-right font-semibold text-slate-800">¥{formatMoney(metrics.daily.grossProfit)}</div>
+ <div className="text-right font-semibold text-slate-800">¥{formatMoney(metrics.monthly.grossProfit)}</div>
+
+ <div className="text-slate-600">付费成本</div>
+ <div className="text-right font-semibold text-slate-800">-¥{formatMoney(metrics.daily.adSpend)}</div>
+ <div className="text-right font-semibold text-slate-800">-¥{formatMoney(metrics.monthly.adSpend)}</div>
+
+ <div className="text-slate-600 font-bold flex items-center pt-2 border-t border-slate-200/50">ROI (投产比)</div>
+ <div className="text-right font-bold text-blue-600 text-lg pt-2 border-t border-slate-200/50 col-span-2">{metrics.roi}</div>
+ </div>
+
+ {/* Giant Profit Boxes */}
+ <div className="grid grid-cols-2 gap-3 mt-4">
+ <div className={`p-3 rounded-xl border flex flex-col items-center justify-center transition-colors shadow-sm ${metrics.daily.netProfit >= 0 ? 'bg-emerald-50/50 border-emerald-100' : 'bg-red-50/50 border-red-100'}`}>
+ <span className="text-xs font-medium text-slate-500 mb-1">今日净利润</span>
+ <span className={`text-2xl font-black flex items-center gap-1 ${metrics.daily.netProfit >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+ {metrics.daily.netProfit >= 0 ? <Icons.TrendingUp size={22}/> : <Icons.TrendingDown size={22}/>}
+ ¥{formatMoney(metrics.daily.netProfit)}
+ </span>
+ </div>
+
+ <div className={`p-3 rounded-xl border flex flex-col items-center justify-center transition-colors shadow-sm ${metrics.monthly.netProfit >= 0 ? 'bg-emerald-50 border-emerald-200' : 'bg-red-50 border-red-200'}`}>
+ <span className="text-xs font-medium text-slate-600 mb-1">本月净利预测</span>
+ <span className={`text-2xl font-black flex items-center gap-1 ${metrics.monthly.netProfit >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>
+ {metrics.monthly.netProfit >= 0 ? <Icons.TrendingUp size={22}/> : <Icons.TrendingDown size={22}/>}
+ ¥{formatMoney(metrics.monthly.netProfit)}
+ </span>
+ </div>
+ </div>
+
+ </div>
+
+ </div>
+ </div>
+ );
+ })}
+
+ {/* Add Button */}
+ <button onClick={addStore} className="flex flex-col items-center justify-center h-full min-h-[450px] border-2 border-dashed border-slate-300 rounded-2xl text-slate-400 hover:text-blue-600 hover:border-blue-400 hover:bg-blue-50 transition-all duration-300 group bg-white">
+ <div className="bg-slate-50 p-4 rounded-full shadow-sm mb-3 group-hover:shadow-md transition-all group-hover:bg-white text-blue-500">
+ <Icons.Plus size={32}/>
+ </div>
+ <span className="font-medium">添加新店铺</span>
+ <span className="text-xs mt-1 opacity-70">默认值: 毛利55% / 退款35%</span>
+ </button>
+ </div>
+
+ <div className="text-center text-slate-400 text-xs py-8">
+ 电商智能利润模型 (同屏多维看板版) • 纯本地运行
+ </div>
+
+ </div>
+ </div>
+ );
+ };
+
+ const root = ReactDOM.createRoot(document.getElementById('root'));
+ root.render(<DynamicProfitCalculator />);
+ </script>
+</body>
+</html>
