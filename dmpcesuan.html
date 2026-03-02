@@ -114,6 +114,7 @@
             const [pasteData, setPasteData] = useState('');
             const [margin, setMargin] = useState('');
             const [returnRate, setReturnRate] = useState('');
+            const [newCustRate, setNewCustRate] = useState('100'); // 新增：新客占比，默认 100%
             const [monthlyFixedCost, setMonthlyFixedCost] = useState('');
             
             const [extDays, setExtDays] = useState('');
@@ -327,6 +328,9 @@
                 const calculateTier = (txnVal, aovVal, clickVal, ppcVal, cvrVal) => {
                     const marginRatio = (parseFloat(margin) || 0) / 100;
                     const returnRatio = (parseFloat(returnRate) || 0) / 100;
+                    // 新增：提取新客占比
+                    const ncr = newCustRate === '' ? 100 : parseFloat(newCustRate);
+                    const newCustRatio = ncr / 100;
                     
                     const totalRevenue = txnVal * aovVal;
                     const totalActualRevenue = totalRevenue - totalRevenue * returnRatio;
@@ -334,12 +338,8 @@
                     const totalPaid = clickVal * ppcVal;
                     const totalNetProfit = totalGrossProfit - totalPaid - totalFixedCost;
 
-                    // 计算广告引导的营业额与毛利
-                    const adTxns = clickVal * cvrVal; // 广告引导成交笔数
-                    const adRevenue = adTxns * aovVal;
-                    const adGrossProfit = adRevenue * (1 - returnRatio) * marginRatio;
-                    
-                    // 新增：实际付费转化率
+                    // 实际付费转化率
+                    const adTxns = clickVal * cvrVal; 
                     const paidCvr = clickVal > 0 ? (adTxns / clickVal) * 100 : 0;
                     
                     const dTxns = txnVal / days, dRev = totalRevenue / days, dAct = totalActualRevenue / days, dPaid = totalPaid / days, dNet = totalNetProfit / days;
@@ -347,7 +347,9 @@
                     // 指标计算
                     const roi = totalPaid > 0 ? (totalRevenue / totalPaid) : 0; // 1. 全店中位ROI (毛ROI)
                     const netRoi = totalPaid > 0 ? (totalActualRevenue / totalPaid) : 0; // 2. 全店净有效ROI (GMV*(1-退货率)/付费)
-                    const adNetRoi = totalPaid > 0 ? (adGrossProfit / totalPaid) : 0; // 3. 广告净ROI
+                    
+                    // 3. 广告净ROI (成交总笔数 × 新客占比 × 客单价 × (1 − 退货率) × 毛利率) ÷ 广告总花费
+                    const adNetRoi = totalPaid > 0 ? (txnVal * newCustRatio * aovVal * (1 - returnRatio) * marginRatio) / totalPaid : 0; 
                     
                     const maxBreakevenPpc = aovVal * marginRatio * (1 - returnRatio) * cvrVal;
                     const breakevenRoi = (marginRatio > 0 && returnRatio < 1) ? 1 / (marginRatio * (1 - returnRatio)) : 0;
@@ -365,10 +367,10 @@
                 const steady = calculateTier((deducedTxnMin + deducedTxnMax) / 2, (aov[0] + aov[1]) / 2, (click[0] + click[1]) / 2, (ppc[0] + ppc[1]) / 2, (cvr[0] + cvr[1]) / 2);
 
                 setAnalyzedData({ days, dateStr: extDateStr || '自定义周期', dailyFixedCost, totalFixedCost, isCrossValidated, conservative, steady, optimistic });
-            }, [extDays, extDateStr, extPvMin, extPvMax, extCvrMin, extCvrMax, extTxnMin, extTxnMax, extAovMin, extAovMax, extClickMin, extClickMax, extPpcMin, extPpcMax, margin, returnRate, monthlyFixedCost]);
+            }, [extDays, extDateStr, extPvMin, extPvMax, extCvrMin, extCvrMax, extTxnMin, extTxnMax, extAovMin, extAovMax, extClickMin, extClickMax, extPpcMin, extPpcMax, margin, returnRate, newCustRate, monthlyFixedCost]);
 
             const handleClearAll = () => {
-                setPasteData(''); setMargin(''); setReturnRate(''); setMonthlyFixedCost('');
+                setPasteData(''); setMargin(''); setReturnRate(''); setMonthlyFixedCost(''); setNewCustRate('100');
                 setExtDays(''); setExtDateStr(''); setExtPvMin(''); setExtPvMax('');
                 setExtCvrMin(''); setExtCvrMax(''); setExtTxnMin(''); setExtTxnMax('');
                 setExtAovMin(''); setExtAovMax(''); setExtClickMin(''); setExtClickMax('');
@@ -391,6 +393,14 @@
                 const num = parseFloat(val);
                 if (isNaN(num) || parsedDaysForDisplay <= 0) return null;
                 return `日均 ${Math.round(num * 10000 / parsedDaysForDisplay).toLocaleString()} 笔`;
+            };
+
+            // 动态生成广告净ROI的提示文本
+            const getAdNetRoiTooltip = () => {
+                if (!analyzedData) return "";
+                const currentReturnRate = parseFloat(returnRate) || 0;
+                const currentCostRate = 100 - (parseFloat(margin) || 0);
+                return `＝（成交总笔数 × 新客占比 × 客单价 × (1 − 退货率) × 毛利率）÷（付费点击量 × PPC）\n\n用途：实际广告每投入 1 元，带来约 ${analyzedData.steady.adNetRoi.toFixed(2)} 元的真实毛利润（已扣除 ${currentReturnRate}% 退货 + ${currentCostRate}% 商品成本）；\n\n特点：\n  - 同时剔除退货损失与商品成本，反映广告投入的真实效益；\n  - ROI > 1 表示广告端盈利，< 1 则亏损，是比平台“当天引导 ROI”更可靠的决策指标。\n\n策略指导：\n  - 若 ROI < 1 → 广告亏损，需降低 PPC、提升转化率或优化产品退货率；\n  - 若 ROI ≥ 2 → 广告健康，具备放量空间；\n  - 若 1 ≤ ROI < 2 → 微利状态，需结合固定成本评估全店整体盈亏，谨慎扩量。`;
             };
 
             return (
@@ -503,7 +513,7 @@
                             <div className="bg-white p-5 rounded-xl shadow-sm border border-orange-200 relative overflow-hidden">
                                 <div className="absolute top-0 left-0 w-1.5 h-full bg-orange-500"></div>
                                 <h2 className="text-base font-bold mb-4 text-gray-800">步骤 2：核心测算成本参数</h2>
-                                <div className="grid grid-cols-3 gap-3">
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                                     <div>
                                         <label className="block text-xs font-medium text-gray-700 mb-1">毛利率 (%)</label>
                                         <input type="number" className="w-full p-2 border border-orange-300 rounded-lg focus:ring-1 focus:ring-orange-500 outline-none text-sm bg-orange-50" value={margin} onChange={(e) => setMargin(e.target.value)} placeholder="如: 50" />
@@ -528,6 +538,19 @@
                                         <div className="flex gap-1 mt-4">
                                             <button onClick={() => adjustSingle(setReturnRate, returnRate, -1)} className="flex-1 text-sm py-3 bg-orange-100 text-orange-700 rounded-lg hover:bg-orange-200 transition-colors border border-orange-200 font-bold shadow-sm leading-tight">-</button>
                                             <button onClick={() => adjustSingle(setReturnRate, returnRate, 1)} className="flex-1 text-sm py-3 bg-orange-100 text-orange-700 rounded-lg hover:bg-orange-200 transition-colors border border-orange-200 font-bold shadow-sm leading-tight">+</button>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-medium text-gray-700 mb-1">新客占比 (%)</label>
+                                        <input type="number" className="w-full p-2 border border-orange-300 rounded-lg focus:ring-1 focus:ring-orange-500 outline-none text-sm bg-orange-50" value={newCustRate} onChange={(e) => setNewCustRate(e.target.value)} placeholder="默认: 100" />
+                                        <div className="flex gap-1 mt-1.5">
+                                            {[50, 70, 80, 100].map(val => (
+                                                <button key={val} onClick={() => setNewCustRate(val)} className="flex-1 text-[10px] py-1 bg-orange-50 text-orange-700 rounded hover:bg-orange-100 transition-colors border border-orange-100">{val}%</button>
+                                            ))}
+                                        </div>
+                                        <div className="flex gap-1 mt-4">
+                                            <button onClick={() => adjustSingle(setNewCustRate, newCustRate, -1)} className="flex-1 text-sm py-3 bg-orange-100 text-orange-700 rounded-lg hover:bg-orange-200 transition-colors border border-orange-200 font-bold shadow-sm leading-tight">-</button>
+                                            <button onClick={() => adjustSingle(setNewCustRate, newCustRate, 1)} className="flex-1 text-sm py-3 bg-orange-100 text-orange-700 rounded-lg hover:bg-orange-200 transition-colors border border-orange-200 font-bold shadow-sm leading-tight">+</button>
                                         </div>
                                     </div>
                                     <div>
@@ -627,7 +650,7 @@
                                                     )}
                                                 </div>
                                                 <div className="bg-indigo-50/70 p-3 rounded-lg border border-indigo-100/50 flex flex-col justify-center">
-                                                    <p className="text-xs text-gray-500 mb-1 cursor-help border-b border-dashed border-gray-400 inline-block w-max" title="＝ （广告引导营业额 × 毛利率 ×（1 － 退货率）） ÷ 广告总花费&#10;用途：判断付费推广自身是否盈利（不含自然流量补贴）&#10;特点：最严格的盈亏指标，决定能否持续投广告">广告净ROI ℹ️</p>
+                                                    <p className="text-xs text-gray-500 mb-1 cursor-help border-b border-dashed border-gray-400 inline-block w-max" title={getAdNetRoiTooltip()}>广告净ROI ℹ️</p>
                                                     {analyzedData.conservative.adNetRoi === analyzedData.optimistic.adNetRoi ? (
                                                         <p className={`font-bold text-lg ${analyzedData.steady.adNetRoi >= 1 ? 'text-green-600' : 'text-red-500'}`}>{analyzedData.steady.adNetRoi.toFixed(2)}</p>
                                                     ) : (
