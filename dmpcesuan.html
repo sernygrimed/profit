@@ -1,0 +1,887 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>电商利润自动核算工具 - 智能推演版</title>
+    <!-- 引入 Tailwind CSS 框架 -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 引入 React 核心库 -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+    <!-- 引入 Babel 用于在浏览器中编译 JSX -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <style>
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fade-in {
+            animation: fadeIn 0.4s ease-out forwards;
+        }
+        /* 隐藏数字输入框的上下箭头 */
+        input[type=number]::-webkit-inner-spin-button, 
+        input[type=number]::-webkit-outer-spin-button { 
+            -webkit-appearance: none; 
+            margin: 0; 
+        }
+        /* 自定义滚动条 */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-800 font-sans">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        // 小组件：复用区间输入框 (支持多色彩主题)
+        const RangeInput = ({ label, minVal, setMin, maxVal, setMax, suffix, step, color = 'blue', minSubtext, maxSubtext }) => {
+            // 定义多套专属颜色主题
+            const themes = {
+                blue: { bg: 'bg-blue-50', border: 'border-blue-300', focus: 'focus:ring-blue-500', btnBg: 'bg-blue-100', btnHover: 'hover:bg-blue-200', text: 'text-blue-700', btnBorder: 'border-blue-200' },
+                emerald: { bg: 'bg-emerald-50', border: 'border-emerald-300', focus: 'focus:ring-emerald-500', btnBg: 'bg-emerald-100', btnHover: 'hover:bg-emerald-200', text: 'text-emerald-700', btnBorder: 'border-emerald-200' },
+                purple: { bg: 'bg-purple-50', border: 'border-purple-300', focus: 'focus:ring-purple-500', btnBg: 'bg-purple-100', btnHover: 'hover:bg-purple-200', text: 'text-purple-700', btnBorder: 'border-purple-200' },
+                rose: { bg: 'bg-rose-50', border: 'border-rose-300', focus: 'focus:ring-rose-500', btnBg: 'bg-rose-100', btnHover: 'hover:bg-rose-200', text: 'text-rose-700', btnBorder: 'border-rose-200' },
+                cyan: { bg: 'bg-cyan-50', border: 'border-cyan-300', focus: 'focus:ring-cyan-500', btnBg: 'bg-cyan-100', btnHover: 'hover:bg-cyan-200', text: 'text-cyan-700', btnBorder: 'border-cyan-200' },
+                amber: { bg: 'bg-amber-50', border: 'border-amber-300', focus: 'focus:ring-amber-500', btnBg: 'bg-amber-100', btnHover: 'hover:bg-amber-200', text: 'text-amber-700', btnBorder: 'border-amber-200' },
+                indigo: { bg: 'bg-indigo-50', border: 'border-indigo-300', focus: 'focus:ring-indigo-500', btnBg: 'bg-indigo-100', btnHover: 'hover:bg-indigo-200', text: 'text-indigo-700', btnBorder: 'border-indigo-200' },
+            };
+            const theme = themes[color] || themes.blue;
+
+            const adjustMin = (amount) => {
+                let n = parseFloat(minVal);
+                if (isNaN(n)) n = 0; 
+                setMin(Number((n + amount).toFixed(4)).toString());
+            };
+
+            const adjustMax = (amount) => {
+                let n = parseFloat(maxVal);
+                if (isNaN(n)) n = 0;
+                setMax(Number((n + amount).toFixed(4)).toString());
+            };
+
+            return (
+                <div className="flex flex-col">
+                    <label className={`text-xs font-bold mb-1 ${theme.text}`}>{label}</label>
+                    <div className="grid grid-cols-[1fr_auto_1fr] items-start gap-1.5">
+                        
+                        {/* 左侧：下限输入与控制 */}
+                        <div className="flex flex-col gap-1.5">
+                            <div className="flex items-center gap-1">
+                                <input type="number" className={`w-full min-w-0 p-1.5 border rounded-lg focus:ring-1 outline-none text-sm text-center ${theme.border} ${theme.focus} ${theme.bg}`} placeholder="下限" value={minVal} onChange={(e) => setMin(e.target.value)} />
+                                {suffix && <span className={`text-xs font-bold shrink-0 ${theme.text} opacity-80`}>{suffix}</span>}
+                            </div>
+                            {minSubtext && <div className={`text-[10px] text-center -mt-0.5 ${theme.text} opacity-80`}>{minSubtext}</div>}
+                            {step && (
+                                <div className="flex gap-1 mt-4">
+                                    <button onClick={() => adjustMin(-step)} className={`flex-1 text-sm py-3 rounded-lg transition-colors font-bold leading-tight shadow-sm border ${theme.btnBg} ${theme.text} ${theme.btnHover} ${theme.btnBorder}`}>-</button>
+                                    <button onClick={() => adjustMin(step)} className={`flex-1 text-sm py-3 rounded-lg transition-colors font-bold leading-tight shadow-sm border ${theme.btnBg} ${theme.text} ${theme.btnHover} ${theme.btnBorder}`}>+</button>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* 中间分隔符 (保持居中) */}
+                        <div className="pt-2 flex items-center h-[34px]">
+                            <span className={`font-bold shrink-0 ${theme.text} opacity-50`}>-</span>
+                        </div>
+
+                        {/* 右侧：上限输入与控制 */}
+                        <div className="flex flex-col gap-1.5">
+                            <div className="flex items-center gap-1">
+                                <input type="number" className={`w-full min-w-0 p-1.5 border rounded-lg focus:ring-1 outline-none text-sm text-center ${theme.border} ${theme.focus} ${theme.bg}`} placeholder="上限" value={maxVal} onChange={(e) => setMax(e.target.value)} />
+                                {suffix && <span className={`text-xs font-bold shrink-0 ${theme.text} opacity-80`}>{suffix}</span>}
+                            </div>
+                            {maxSubtext && <div className={`text-[10px] text-center -mt-0.5 ${theme.text} opacity-80`}>{maxSubtext}</div>}
+                            {step && (
+                                <div className="flex gap-1 mt-4">
+                                    <button onClick={() => adjustMax(-step)} className={`flex-1 text-sm py-3 rounded-lg transition-colors font-bold leading-tight shadow-sm border ${theme.btnBg} ${theme.text} ${theme.btnHover} ${theme.btnBorder}`}>-</button>
+                                    <button onClick={() => adjustMax(step)} className={`flex-1 text-sm py-3 rounded-lg transition-colors font-bold leading-tight shadow-sm border ${theme.btnBg} ${theme.text} ${theme.btnHover} ${theme.btnBorder}`}>+</button>
+                                </div>
+                            )}
+                        </div>
+
+                    </div>
+                </div>
+            );
+        };
+
+        function App() {
+            const [pasteData, setPasteData] = useState('');
+            const [margin, setMargin] = useState('');
+            const [returnRate, setReturnRate] = useState('');
+            const [newCustRate, setNewCustRate] = useState('100'); // 新增：新客占比，默认 100%
+            const [monthlyFixedCost, setMonthlyFixedCost] = useState('');
+            
+            const [extDays, setExtDays] = useState('');
+            const [extDateStr, setExtDateStr] = useState('');
+            const [extPvMin, setExtPvMin] = useState('');
+            const [extPvMax, setExtPvMax] = useState('');
+            const [extCvrMin, setExtCvrMin] = useState('');
+            const [extCvrMax, setExtCvrMax] = useState('');
+            const [extTxnMin, setExtTxnMin] = useState('');
+            const [extTxnMax, setExtTxnMax] = useState('');
+            const [extAovMin, setExtAovMin] = useState('');
+            const [extAovMax, setExtAovMax] = useState('');
+            const [extClickMin, setExtClickMin] = useState('');
+            const [extClickMax, setExtClickMax] = useState('');
+            const [extPpcMin, setExtPpcMin] = useState('');
+            const [extPpcMax, setExtPpcMax] = useState('');
+            
+            // 新增：快捷推算状态与原始提取数据缓存
+            const [dailyRev, setDailyRev] = useState('');
+            const [dailyPaid, setDailyPaid] = useState('');
+            const [rawParsed, setRawParsed] = useState(null);
+
+            const [analyzedData, setAnalyzedData] = useState(null);
+
+            const adjustSingle = (setter, current, amount) => {
+                const n = parseFloat(current);
+                if (isNaN(n)) {
+                    setter(amount.toString());
+                } else {
+                    setter(Number((n + amount).toFixed(4)).toString());
+                }
+            };
+
+            const formatWan = (val) => {
+                if (val === '' || val === null || val === undefined) return '';
+                const num = parseFloat(val);
+                if (isNaN(num)) return '';
+                return parseFloat((num / 10000).toFixed(4)).toString();
+            };
+
+            // 智能提取数据逻辑
+            useEffect(() => {
+                if (!pasteData.trim()) return;
+                const dateRegex = /(\d{4}[-/]\d{1,2}[-/]\d{1,2})\s*(?:至|-|~)\s*(\d{4}[-/]\d{1,2}[-/]\d{1,2})/g;
+                let match;
+                let totalDays = 0;
+                let dateStrings = [];
+                while ((match = dateRegex.exec(pasteData)) !== null) {
+                    dateStrings.push(`${match[1]} 至 ${match[2]}`);
+                    const start = new Date(match[1]);
+                    const end = new Date(match[2]);
+                    const days = Math.round((end - start) / 86400000) + 1;
+                    totalDays += days;
+                }
+
+                const extractRange = (keywords) => {
+                    const lines = pasteData.split('\n');
+                    let targetLine = '';
+                    for (const line of lines) {
+                        if (keywords.some((kw) => line.includes(kw))) {
+                            targetLine = line;
+                            break;
+                        }
+                    }
+                    if (!targetLine) return ['', ''];
+                    const matches = targetLine.match(/[\d\.,]+[万%]?(?:\s*[-~至]\s*[\d\.,]+[万%]?)?/g);
+                    if (!matches) return ['', ''];
+                    let valStr = matches[matches.length - 1]; 
+                    const isPercentContext = targetLine.includes('%') || keywords.some(k => k.includes('率') || k.includes('占比'));
+                    const parseNum = (s) => {
+                        if (!s) return '';
+                        let numStr = s.replace(/,/g, '').trim();
+                        const hasPercent = numStr.includes('%');
+                        numStr = numStr.replace(/%/g, '');
+                        let num = parseFloat(numStr);
+                        if (isNaN(num)) return '';
+                        if (s.includes('万')) num *= 10000;
+                        if (hasPercent || (isPercentContext && !s.includes('万'))) {
+                            if (!(num > 100 && !hasPercent)) num /= 100;
+                        }
+                        return num;
+                    };
+                    if (valStr.includes('-') || valStr.includes('至') || valStr.includes('~')) {
+                        const splitChar = valStr.includes('-') ? '-' : valStr.includes('至') ? '至' : '~';
+                        const bounds = valStr.split(splitChar).map((s) => s.trim());
+                        if (bounds[1] && bounds[1].includes('万') && !bounds[0].includes('万')) bounds[0] += '万';
+                        if (bounds[1] && bounds[1].includes('%') && !bounds[0].includes('%')) bounds[0] += '%';
+                        let min = parseNum(bounds[0]);
+                        let max = parseNum(bounds[1]);
+                        if (min !== '' && max !== '' && min > max) [min, max] = [max, min];
+                        return [min, max];
+                    } else {
+                        const val = parseNum(valStr);
+                        return [val, val];
+                    }
+                };
+
+                const rawPV = extractRange(['整体IPV', '整体PV', 'IPV', 'PV', '总流量', '访客']);
+                const rawCVR = extractRange(['整体成交转化率', '成交转化率', '转化率', 'CVR']);
+                const rawTxns = extractRange(['整体成交笔数', '成交笔数', '总笔数', '销量', '订单量']);
+                const rawAOV = extractRange(['整体笔单价', '整体客单价', '笔单价', '客单价', 'AOV']);
+                const clicks = extractRange(['付费点击量', '点击量', '付费点击', '推广点击']);
+                const ppc = extractRange(['单次点击成本', 'PPC', '点击成本', '平均点击花费']);
+                const rawNewCust = extractRange(['新客成交占比', '新客占比']); // 新增：提取新客占比
+
+                const parsed = {
+                    days: totalDays || '',
+                    dateStr: dateStrings.join(', '),
+                    pv: [formatWan(rawPV[0]), formatWan(rawPV[1])],
+                    cvr: [rawCVR[0] !== '' ? +(rawCVR[0] * 100).toFixed(4) : '', rawCVR[1] !== '' ? +(rawCVR[1] * 100).toFixed(4) : ''],
+                    txn: [formatWan(rawTxns[0]), formatWan(rawTxns[1])],
+                    aov: [rawAOV[0] !== '' ? rawAOV[0] : '', rawAOV[1] !== '' ? rawAOV[1] : ''],
+                    click: [formatWan(clicks[0]), formatWan(clicks[1])],
+                    ppc: [ppc[0] !== '' ? ppc[0] : '', ppc[1] !== '' ? ppc[1] : ''],
+                    newCust: rawNewCust[0] !== '' ? parseFloat(((rawNewCust[0] + rawNewCust[1]) / 2 * 100).toFixed(2)).toString() : '100' // 计算均值
+                };
+                setRawParsed(parsed);
+
+                setExtDays(parsed.days);
+                setExtDateStr(parsed.dateStr);
+                setExtPvMin(parsed.pv[0]); setExtPvMax(parsed.pv[1]);
+                setExtCvrMin(parsed.cvr[0]); setExtCvrMax(parsed.cvr[1]);
+                setExtAovMin(parsed.aov[0]); setExtAovMax(parsed.aov[1]);
+                setExtPpcMin(parsed.ppc[0]); setExtPpcMax(parsed.ppc[1]);
+                
+                // 自动填充新客占比
+                if (rawNewCust[0] !== '') {
+                    setNewCustRate(parsed.newCust);
+                }
+                
+                // 仅当快捷输入为空时，直接使用提取的笔数和点击量
+                if (!dailyRev) { setExtTxnMin(parsed.txn[0]); setExtTxnMax(parsed.txn[1]); }
+                if (!dailyPaid) { setExtClickMin(parsed.click[0]); setExtClickMax(parsed.click[1]); }
+            }, [pasteData]);
+
+            // 新增：快捷推算联动 - 日均营业额 -> 成交总笔数
+            useEffect(() => {
+                if (dailyRev !== '' && extDays !== '') {
+                    let aMin = parseFloat(extAovMin);
+                    let aMax = parseFloat(extAovMax);
+                    if (isNaN(aMin)) aMin = aMax;
+                    if (isNaN(aMax)) aMax = aMin;
+                    if (!isNaN(aMin) && aMin > 0 && !isNaN(aMax) && aMax > 0) {
+                        const rev = parseFloat(dailyRev) * parseFloat(extDays);
+                        let t1 = rev / aMin / 10000;
+                        let t2 = rev / aMax / 10000;
+                        setExtTxnMin(parseFloat(Math.min(t1, t2).toFixed(4)).toString());
+                        setExtTxnMax(parseFloat(Math.max(t1, t2).toFixed(4)).toString());
+                    }
+                } else if (rawParsed && dailyRev === '') {
+                    // 清空时恢复自动提取的数据
+                    setExtTxnMin(rawParsed.txn[0]);
+                    setExtTxnMax(rawParsed.txn[1]);
+                }
+            }, [dailyRev, extAovMin, extAovMax, extDays, rawParsed]);
+
+            // 新增：快捷推算联动 - 日推广付费 -> 付费点击总量
+            useEffect(() => {
+                if (dailyPaid !== '' && extDays !== '') {
+                    let pMin = parseFloat(extPpcMin);
+                    let pMax = parseFloat(extPpcMax);
+                    if (isNaN(pMin)) pMin = pMax;
+                    if (isNaN(pMax)) pMax = pMin;
+                    if (!isNaN(pMin) && pMin > 0 && !isNaN(pMax) && pMax > 0) {
+                        const paid = parseFloat(dailyPaid) * parseFloat(extDays);
+                        let c1 = paid / pMin / 10000;
+                        let c2 = paid / pMax / 10000;
+                        setExtClickMin(parseFloat(Math.min(c1, c2).toFixed(4)).toString());
+                        setExtClickMax(parseFloat(Math.max(c1, c2).toFixed(4)).toString());
+                    }
+                } else if (rawParsed && dailyPaid === '') {
+                    // 清空时恢复自动提取的数据
+                    setExtClickMin(rawParsed.click[0]);
+                    setExtClickMax(rawParsed.click[1]);
+                }
+            }, [dailyPaid, extPpcMin, extPpcMax, extDays, rawParsed]);
+
+            // 实时核算逻辑
+            useEffect(() => {
+                const days = parseFloat(extDays) || 0;
+                if (days <= 0) { setAnalyzedData(null); return; }
+                const getVal = (minState, maxState, multiplier = 1) => {
+                    const parseVal = (v) => {
+                        if (v === '' || v === null || v === undefined) return NaN;
+                        return parseFloat(v) * multiplier;
+                    };
+                    let min = parseVal(minState); let max = parseVal(maxState);
+                    if (isNaN(min) && isNaN(max)) return [0, 0];
+                    if (isNaN(min)) min = max; if (isNaN(max)) max = min;
+                    if (min > max) [min, max] = [max, min];
+                    return [min, max];
+                };
+
+                const pv = getVal(extPvMin, extPvMax, 10000);
+                const cvr = getVal(extCvrMin, extCvrMax, 0.01);
+                const txns = getVal(extTxnMin, extTxnMax, 10000);
+                const click = getVal(extClickMin, extClickMax, 10000);
+                const aov = getVal(extAovMin, extAovMax, 1);
+                const ppc = getVal(extPpcMin, extPpcMax, 1);
+
+                if (aov[1] === 0) { setAnalyzedData(null); return; }
+
+                let deducedTxnMin = txns[0], deducedTxnMax = txns[1], isCrossValidated = false;
+                if (pv[1] > 0 && cvr[1] > 0 && txns[1] > 0) {
+                    const calcMin = pv[0] * cvr[0], calcMax = pv[1] * cvr[1];
+                    const overlapMin = Math.max(txns[0], calcMin), overlapMax = Math.min(txns[1], calcMax);
+                    if (overlapMin <= overlapMax && overlapMax > 0) {
+                        deducedTxnMin = overlapMin; deducedTxnMax = overlapMax; isCrossValidated = true;
+                    }
+                }
+                if (txns[1] === 0 && pv[1] > 0 && cvr[1] > 0) {
+                    deducedTxnMin = pv[0] * cvr[0]; deducedTxnMax = pv[1] * cvr[1]; isCrossValidated = true;
+                }
+
+                const dailyFixedCost = (parseFloat(monthlyFixedCost) || 0) / 30;
+                const totalFixedCost = dailyFixedCost * days;
+
+                const calculateTier = (txnVal, aovVal, clickVal, ppcVal, cvrVal) => {
+                    const marginRatio = (parseFloat(margin) || 0) / 100;
+                    const returnRatio = (parseFloat(returnRate) || 0) / 100;
+                    // 新增：提取新客占比
+                    const ncr = newCustRate === '' ? 100 : parseFloat(newCustRate);
+                    const newCustRatio = ncr / 100;
+                    
+                    const totalRevenue = txnVal * aovVal;
+                    const totalActualRevenue = totalRevenue - totalRevenue * returnRatio;
+                    const totalGrossProfit = totalActualRevenue * marginRatio;
+                    const totalPaid = clickVal * ppcVal;
+                    const totalNetProfit = totalGrossProfit - totalPaid - totalFixedCost;
+
+                    // 实际付费转化率
+                    const adTxns = clickVal * cvrVal; 
+                    const paidCvr = clickVal > 0 ? (adTxns / clickVal) * 100 : 0;
+                    
+                    const dTxns = txnVal / days, dRev = totalRevenue / days, dAct = totalActualRevenue / days, dPaid = totalPaid / days, dNet = totalNetProfit / days;
+                    
+                    // 指标计算
+                    const roi = totalPaid > 0 ? (totalRevenue / totalPaid) : 0; // 1. 全店中位ROI (毛ROI)
+                    const netRoi = totalPaid > 0 ? (totalActualRevenue / totalPaid) : 0; // 2. 全店净有效ROI (GMV*(1-退货率)/付费)
+                    
+                    // 3. 广告净ROI (成交总笔数 × 新客占比 × 客单价 × (1 − 退货率) × 毛利率) ÷ 广告总花费
+                    const adNetRoi = totalPaid > 0 ? (txnVal * newCustRatio * aovVal * (1 - returnRatio) * marginRatio) / totalPaid : 0; 
+                    
+                    const maxBreakevenPpc = aovVal * marginRatio * (1 - returnRatio) * cvrVal;
+                    const breakevenRoi = (marginRatio > 0 && returnRatio < 1) ? 1 / (marginRatio * (1 - returnRatio)) : 0;
+
+                    return {
+                        aov: aovVal, totalTxns: txnVal, totalRevenue, totalActualRevenue, totalPaid, totalNetProfit,
+                        dailyTxns: dTxns, dailyRevenue: dRev, dailyActualRevenue: dAct, dailyPaid: dPaid, dailyNetProfit: dNet,
+                        monthlyTxns: dTxns * 30, monthlyRevenue: dRev * 30, monthlyActualRevenue: dAct * 30, monthlyPaid: dPaid * 30, monthlyNetProfit: dNet * 30,
+                        roi, netRoi, adNetRoi, maxBreakevenPpc, breakevenRoi, paidCvr
+                    };
+                };
+
+                const conservative = calculateTier(deducedTxnMin, aov[0], click[1] || click[0], ppc[1] || ppc[0], cvr[0]);
+                const optimistic = calculateTier(deducedTxnMax, aov[1], click[0], ppc[0], cvr[1]);
+                const steady = calculateTier((deducedTxnMin + deducedTxnMax) / 2, (aov[0] + aov[1]) / 2, (click[0] + click[1]) / 2, (ppc[0] + ppc[1]) / 2, (cvr[0] + cvr[1]) / 2);
+
+                // --- 实时同频诊断算法 ---
+                const marginRatio = (parseFloat(margin) || 0) / 100;
+                const returnRatio = (parseFloat(returnRate) || 0) / 100;
+                const currentRoi = steady.roi;
+                const currentBreakevenRoi = steady.breakevenRoi;
+                
+                let actualPpc = (parseFloat(extPpcMin) + parseFloat(extPpcMax)) / 2;
+                if (isNaN(actualPpc)) actualPpc = parseFloat(extPpcMin) || 0;
+                const maxPpc = steady.maxBreakevenPpc;
+                
+                let actualCvr = (parseFloat(extCvrMin) + parseFloat(extCvrMax)) / 2;
+                if (isNaN(actualCvr)) actualCvr = parseFloat(extCvrMin) || 0;
+                
+                const effectiveMargin = marginRatio * (1 - returnRatio) * 100;
+                const roiDiff = currentRoi - currentBreakevenRoi;
+                
+                // 判断是否盈利（ROI >= 保本ROAS）
+                const isProfitable = currentRoi >= currentBreakevenRoi && currentBreakevenRoi > 0;
+                const isMicroProfit = isProfitable && roiDiff < 0.3;
+                
+                let profitStatus = !isProfitable ? "亏损" : (isMicroProfit ? "微利" : "盈利");
+                
+                // 评判健康评级 (纯看利润空间)
+                let grade = 'C';
+                if (!isProfitable) grade = 'C';
+                else if (roiDiff < 0.3) grade = 'B';
+                else if (roiDiff >= 0.3 && roiDiff < 1.0) grade = 'A';
+                else grade = 'A+';
+                
+                // 放大策略
+                let scaling = grade === 'C' ? '禁止放大' : (grade === 'B' ? '需优化后放大' : '可进一步放大');
+                
+                // 1. 核心风险点提取
+                let allRisks = [];
+                if (!isProfitable) allRisks.push("ROI已击穿保本线(直接亏损)");
+                if (actualPpc > 0 && maxPpc > 0 && actualPpc >= maxPpc * 0.9) allRisks.push("流量成本高企，已逼近/击穿极限保本水位");
+                if (returnRatio >= 0.3) allRisks.push(`高达${(returnRatio*100).toFixed(0)}%的退货率严重反噬前端毛利`);
+                if (actualCvr < 1.0 && actualCvr > 0) allRisks.push("流量承接极差(<1%)，导致广告费被巨量空耗");
+                if (steady.totalNetProfit < 0 && steady.totalGrossProfit > steady.totalPaid) allRisks.push("当前毛利盘规模无法摊销日常固定开支");
+                if (isMicroProfit) allRisks.push("利润空间极度压缩(处于微利走钢丝边缘)");
+                if (allRisks.length === 0) allRisks.push("各项指标均在安全线内，暂无显著风险");
+                const riskStr = allRisks.slice(0, 3).join("；");
+                
+                // 2. 多维样本分析结论
+                let mdaLines = [];
+                if (actualPpc > 0 && maxPpc > 0) {
+                    if (actualPpc < maxPpc * 0.5) mdaLines.push("【流量获取】极佳：引流成本远低于红线，流量获取的容错率极高，具备强势抢量的基础。");
+                    else if (actualPpc >= maxPpc * 0.9) mdaLines.push("【流量获取】高危：出价空间已被锁死，流量获取处于被动挨打状态，极易陷入投越多亏越多的泥潭。");
+                    else mdaLines.push("【流量获取】良好：引流成本在合理区间内，仍有一定的出价与调控空间。");
+                }
+                if (actualCvr >= 2.0) mdaLines.push("【承接效率】优秀：店铺前端承接能力强劲，进店流量的利用率处于行业较高水平。");
+                else if (actualCvr > 0) mdaLines.push("【承接效率】疲软：大量付费买来的访客被白白流失，详情页或买家秀可能存在致命信任卡点。");
+                if (returnRatio >= 0.4) mdaLines.push("【利润结构】脆弱：极高的退货率导致账面处于“虚假繁荣”，发货越多亏损越重。");
+                else if (effectiveMargin >= 30) mdaLines.push("【利润结构】稳健：充足的有效毛利额，为后续的广告试错和日常运营备足了安全垫。");
+                else mdaLines.push("【利润结构】单薄：单票有效毛利偏低，模型抗风险能力极弱，极度依赖于薄利多销来回本。");
+                
+                // 3. 针对性优化行动方向
+                let advicesLines = [];
+                if (grade === 'C' || grade === 'B') {
+                    if (actualPpc >= maxPpc) advicesLines.push("降出价止血：立刻下调核心词PPC至极限保本线以下，并暂停连续7天只耗费无转化的垃圾流量。");
+                    if (returnRatio >= 0.3) advicesLines.push("狠抓退货率：深度分析售后原因（尺码/色差/材质），优化预期管理与发货前质检，降低非质量退货。");
+                    if (actualCvr < 1.5) advicesLines.push("提升转化率：诊断流失链路，重构主图卖点排序，利用客服主动催付或大额满减券进行逼单。");
+                    if (effectiveMargin < 20) advicesLines.push("拉升客单价：通过设计满N件打折、打包组合套餐、买A送B等连带营销玩法，变相摊薄单客获取成本。");
+                } else {
+                    advicesLines.push("稳步拓流：在确保ROI高于保本线的前提下，尝试以5%-10%的幅度逐步提升日限额，测试流量天花板。");
+                    advicesLines.push("防御固守：针对转化极佳的核心长尾词提高卡位溢价，防范竞品恶意低价劫持流量。");
+                    if (returnRatio > 0.15) advicesLines.push("压榨纯利：将退货率再向下压降2-3个百分点，这部分省下来的退货运费和破损都将转化为实打实的纯利润。");
+                }
+                if(advicesLines.length < 3) advicesLines.push("建议常态化监控核心PPC与转化率波动，避免盲目主观决策。");
+                
+                const diag = { profitStatus, grade, scaling, riskStr, mdaLines, breakevenRoi: currentBreakevenRoi, roi: currentRoi, effectiveMargin, adviceLines: advicesLines.slice(0, 4) };
+
+                setAnalyzedData({ days, dateStr: extDateStr || '自定义周期', dailyFixedCost, totalFixedCost, isCrossValidated, conservative, steady, optimistic, diag });
+            }, [extDays, extDateStr, extPvMin, extPvMax, extCvrMin, extCvrMax, extTxnMin, extTxnMax, extAovMin, extAovMax, extClickMin, extClickMax, extPpcMin, extPpcMax, margin, returnRate, newCustRate, monthlyFixedCost]);
+
+            const handleClearAll = () => {
+                setPasteData(''); setMargin(''); setReturnRate(''); setMonthlyFixedCost(''); setNewCustRate('100');
+                setExtDays(''); setExtDateStr(''); setExtPvMin(''); setExtPvMax('');
+                setExtCvrMin(''); setExtCvrMax(''); setExtTxnMin(''); setExtTxnMax('');
+                setExtAovMin(''); setExtAovMax(''); setExtClickMin(''); setExtClickMax('');
+                setExtPpcMin(''); setExtPpcMax(''); setAnalyzedData(null);
+                setDailyRev(''); setDailyPaid(''); setRawParsed(null);
+            };
+
+            const formatCurrency = (val) => {
+                if (Math.abs(val) >= 10000) return (val < 0 ? '-' : '') + '¥' + (Math.abs(val) / 10000).toFixed(1) + '万';
+                return new Intl.NumberFormat('zh-CN', { style: 'currency', currency: 'CNY', minimumFractionDigits: 1, maximumFractionDigits: 1 }).format(val);
+            };
+
+            const formatCount = (val) => {
+                if (Math.abs(val) >= 10000) return parseFloat((Math.abs(val) / 10000).toFixed(2)).toString() + '万';
+                return Math.round(val).toLocaleString();
+            };
+
+            const parsedDaysForDisplay = parseFloat(extDays) || 0;
+            const calcDailyTxnStr = (val) => {
+                const num = parseFloat(val);
+                if (isNaN(num) || parsedDaysForDisplay <= 0) return null;
+                return `日均 ${Math.round(num * 10000 / parsedDaysForDisplay).toLocaleString()} 笔`;
+            };
+
+            // 动态生成广告净ROI的提示文本
+            const getAdNetRoiTooltip = () => {
+                if (!analyzedData) return "";
+                const currentReturnRate = parseFloat(returnRate) || 0;
+                const currentCostRate = 100 - (parseFloat(margin) || 0);
+                return `＝（成交总笔数 × 新客占比 × 客单价 × (1 − 退货率) × 毛利率）÷（付费点击量 × PPC）\n\n用途：实际广告每投入 1 元，带来约 ${analyzedData.steady.adNetRoi.toFixed(2)} 元的真实毛利润（已扣除 ${currentReturnRate}% 退货 + ${currentCostRate}% 商品成本）；\n\n特点：\n  - 同时剔除退货损失与商品成本，反映广告投入的真实效益；\n  - ROI > 1 表示广告端盈利，< 1 则亏损，是比平台“当天引导 ROI”更可靠的决策指标。\n\n策略指导：\n  - 若 ROI < 1 → 广告亏损，需降低 PPC、提升转化率或优化产品退货率；\n  - 若 ROI ≥ 2 → 广告健康，具备放量空间；\n  - 若 1 ≤ ROI < 2 → 微利状态，需结合固定成本评估全店整体盈亏，谨慎扩量。`;
+            };
+
+            return (
+                <div className="min-h-screen p-4 md:p-6 bg-gray-100">
+                    <div className="max-w-[1400px] mx-auto grid grid-cols-1 xl:grid-cols-12 gap-6">
+                        
+                        {/* 左侧操作区 */}
+                        <div className="xl:col-span-5 flex flex-col gap-4">
+                            
+                            <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-200">
+                                <h2 className="text-base font-bold mb-3 text-gray-800 flex items-center justify-between">
+                                    <span>步骤 1：粘贴基础数据 <span className="text-xs text-blue-500 font-normal bg-blue-50 px-2 py-0.5 rounded">自动提取</span></span>
+                                    <button onClick={handleClearAll} className="text-sm text-gray-400 hover:text-red-500 transition-colors flex items-center gap-1">
+                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                                        清空
+                                    </button>
+                                </h2>
+                                <textarea
+                                    className="w-full h-28 p-3 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all resize-none"
+                                    value={pasteData}
+                                    onChange={(e) => setPasteData(e.target.value)}
+                                    placeholder="请在此粘贴生意参谋等表格数据..."
+                                />
+                            </div>
+
+                            {/* 移动过来的指标切片对比面板 */}
+                            {analyzedData && (
+                                <div className="bg-white p-5 rounded-xl shadow-sm border border-purple-200 relative overflow-hidden animate-fade-in">
+                                    <div className="absolute top-0 left-0 w-1.5 h-full bg-purple-500"></div>
+                                    <h2 className="text-base font-bold mb-4 text-gray-800 flex items-center gap-2">
+                                        <span className="text-purple-600">
+                                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                                        </span>
+                                        指标切片对比面板
+                                    </h2>
+                                    <div className="grid grid-cols-1 gap-5">
+                                        <section>
+                                            <h3 className="font-bold text-sm text-gray-700 mb-2">📅 日均指标切片</h3>
+                                            <div className="overflow-x-auto shadow-sm rounded-lg border border-gray-200">
+                                                <table className="w-full text-xs text-left min-w-[300px]">
+                                                    <thead className="bg-gray-100 text-gray-700">
+                                                        <tr><th className="px-3 py-2 border-b">指标</th><th className="px-3 py-2 border-b font-semibold">悲观</th><th className="px-3 py-2 border-b font-semibold">稳健</th><th className="px-3 py-2 border-b font-semibold">乐观</th></tr>
+                                                    </thead>
+                                                    <tbody className="divide-y divide-gray-100 bg-white">
+                                                        <tr><td className="px-3 py-2 text-gray-500">日营业额</td><td className="px-3 py-2">{formatCurrency(analyzedData.conservative.dailyRevenue)}</td><td className="px-3 py-2">{formatCurrency(analyzedData.steady.dailyRevenue)}</td><td className="px-3 py-2">{formatCurrency(analyzedData.optimistic.dailyRevenue)}</td></tr>
+                                                        <tr className="bg-gray-50/30"><td className="px-3 py-2 text-gray-500">日推广费</td><td className="px-3 py-2 text-red-500">{formatCurrency(analyzedData.conservative.dailyPaid)}</td><td className="px-3 py-2 text-red-500">{formatCurrency(analyzedData.steady.dailyPaid)}</td><td className="px-3 py-2 text-red-500">{formatCurrency(analyzedData.optimistic.dailyPaid)}</td></tr>
+                                                        <tr><td className="px-3 py-2 text-gray-800 font-bold">日均净利润</td><td className={`px-3 py-2 font-bold ${analyzedData.conservative.dailyNetProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>{formatCurrency(analyzedData.conservative.dailyNetProfit)}</td><td className={`px-3 py-2 font-bold ${analyzedData.steady.dailyNetProfit >= 0 ? 'text-green-600' : 'text-red-500'}`}>{formatCurrency(analyzedData.steady.dailyNetProfit)}</td><td className={`px-3 py-2 font-bold ${analyzedData.optimistic.dailyNetProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>{formatCurrency(analyzedData.optimistic.dailyNetProfit)}</td></tr>
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </section>
+                                        <section>
+                                            <h3 className="font-bold text-sm text-gray-700 mb-2">📦 理论月度切片 (按30天)</h3>
+                                            <div className="overflow-x-auto shadow-sm rounded-lg border border-gray-200">
+                                                <table className="w-full text-xs text-left min-w-[300px]">
+                                                    <thead className="bg-gray-100 text-gray-700">
+                                                        <tr><th className="px-3 py-2 border-b">指标</th><th className="px-3 py-2 border-b font-semibold">悲观</th><th className="px-3 py-2 border-b font-semibold">稳健</th><th className="px-3 py-2 border-b font-semibold">乐观</th></tr>
+                                                    </thead>
+                                                    <tbody className="divide-y divide-gray-100 bg-white">
+                                                        <tr><td className="px-3 py-2 text-gray-500">月营业额</td><td className="px-3 py-2">{formatCurrency(analyzedData.conservative.monthlyRevenue)}</td><td className="px-3 py-2">{formatCurrency(analyzedData.steady.monthlyRevenue)}</td><td className="px-3 py-2">{formatCurrency(analyzedData.optimistic.monthlyRevenue)}</td></tr>
+                                                        <tr className="bg-gray-50/30"><td className="px-3 py-2 text-gray-500">月推广费</td><td className="px-3 py-2 text-red-500">{formatCurrency(analyzedData.conservative.monthlyPaid)}</td><td className="px-3 py-2 text-red-500">{formatCurrency(analyzedData.steady.monthlyPaid)}</td><td className="px-3 py-2 text-red-500">{formatCurrency(analyzedData.optimistic.monthlyPaid)}</td></tr>
+                                                        <tr><td className="px-3 py-2 text-gray-800 font-bold">月净利润</td><td className={`px-3 py-2 font-bold ${analyzedData.conservative.monthlyNetProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>{formatCurrency(analyzedData.conservative.monthlyNetProfit)}</td><td className={`px-3 py-2 font-bold ${analyzedData.steady.monthlyNetProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>{formatCurrency(analyzedData.steady.monthlyNetProfit)}</td><td className={`px-3 py-2 font-bold ${analyzedData.optimistic.monthlyNetProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>{formatCurrency(analyzedData.optimistic.monthlyNetProfit)}</td></tr>
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </section>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* 新增：快捷推算板块 */}
+                            <div className="bg-white p-5 rounded-xl shadow-sm border border-emerald-200 relative overflow-hidden">
+                                <div className="absolute top-0 left-0 w-1.5 h-full bg-emerald-500"></div>
+                                <h2 className="text-base font-bold mb-3 text-gray-800 flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                        快捷推算 <span className="text-xs font-normal text-gray-500">(已知日均金额时使用)</span>
+                                    </div>
+                                    {(dailyRev !== '' || dailyPaid !== '') && (
+                                        <button onClick={() => { setDailyRev(''); setDailyPaid(''); }} className="text-sm text-emerald-500 hover:text-emerald-600 transition-colors flex items-center gap-1 font-normal">
+                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                                            清除
+                                        </button>
+                                    )}
+                                </h2>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-xs font-medium text-gray-600 mb-1">日均营业额</label>
+                                        <div className="flex items-center gap-1">
+                                            <input type="number" className="w-full p-2 border border-emerald-300 rounded focus:ring-1 focus:ring-emerald-500 outline-none text-sm bg-emerald-50" placeholder="可留空，元" value={dailyRev} onChange={e => setDailyRev(e.target.value)} />
+                                        </div>
+                                        {dailyRev !== '' && !isNaN(parseFloat(dailyRev)) && (
+                                            <div className="text-[10px] text-emerald-600/80 mt-1 pl-1 font-medium">推算月均: {formatCurrency(parseFloat(dailyRev) * 30)}</div>
+                                        )}
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-medium text-gray-600 mb-1">日推广付费</label>
+                                        <div className="flex items-center gap-1">
+                                            <input type="number" className="w-full p-2 border border-emerald-300 rounded focus:ring-1 focus:ring-emerald-500 outline-none text-sm bg-emerald-50" placeholder="可留空，元" value={dailyPaid} onChange={e => setDailyPaid(e.target.value)} />
+                                        </div>
+                                        {dailyPaid !== '' && !isNaN(parseFloat(dailyPaid)) && (
+                                            <div className="text-[10px] text-emerald-600/80 mt-1 pl-1 font-medium">推算月均: {formatCurrency(parseFloat(dailyPaid) * 30)}</div>
+                                        )}
+                                    </div>
+                                </div>
+                                <p className="text-[11px] text-gray-400 mt-3 leading-relaxed">
+                                    输入上述金额后，结合下方“单次点击成本”和“客单价”，将自动<strong className="text-emerald-600 font-bold">同步刷新</strong>“成交总笔数”与“付费点击总量”。清空则恢复提取原值。
+                                </p>
+                            </div>
+
+                            <div className="bg-white p-5 rounded-xl shadow-sm border border-orange-200 relative overflow-hidden">
+                                <div className="absolute top-0 left-0 w-1.5 h-full bg-orange-500"></div>
+                                <h2 className="text-base font-bold mb-4 text-gray-800">步骤 2：核心测算成本参数</h2>
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                                    <div>
+                                        <label className="block text-xs font-medium text-gray-700 mb-1">毛利率 (%)</label>
+                                        <input type="number" className="w-full p-2 border border-orange-300 rounded-lg focus:ring-1 focus:ring-orange-500 outline-none text-sm bg-orange-50" value={margin} onChange={(e) => setMargin(e.target.value)} placeholder="如: 50" />
+                                        <div className="flex gap-1 mt-1.5">
+                                            {[35, 55, 60, 65].map(val => (
+                                                <button key={val} onClick={() => setMargin(val)} className="flex-1 text-[10px] py-1 bg-orange-50 text-orange-700 rounded hover:bg-orange-100 transition-colors border border-orange-100">{val}%</button>
+                                            ))}
+                                        </div>
+                                        <div className="flex gap-1 mt-4">
+                                            <button onClick={() => adjustSingle(setMargin, margin, -1)} className="flex-1 text-sm py-3 bg-orange-100 text-orange-700 rounded-lg hover:bg-orange-200 transition-colors border border-orange-200 font-bold shadow-sm leading-tight">-</button>
+                                            <button onClick={() => adjustSingle(setMargin, margin, 1)} className="flex-1 text-sm py-3 bg-orange-100 text-orange-700 rounded-lg hover:bg-orange-200 transition-colors border border-orange-200 font-bold shadow-sm leading-tight">+</button>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-medium text-gray-700 mb-1">退货率 (%)</label>
+                                        <input type="number" className="w-full p-2 border border-orange-300 rounded-lg focus:ring-1 focus:ring-orange-500 outline-none text-sm bg-orange-50" value={returnRate} onChange={(e) => setReturnRate(e.target.value)} placeholder="如: 10" />
+                                        <div className="flex gap-1 mt-1.5">
+                                            {[15, 20, 33, 35].map(val => (
+                                                <button key={val} onClick={() => setReturnRate(val)} className="flex-1 text-[10px] py-1 bg-orange-50 text-orange-700 rounded hover:bg-orange-100 transition-colors border border-orange-100">{val}%</button>
+                                            ))}
+                                        </div>
+                                        <div className="flex gap-1 mt-4">
+                                            <button onClick={() => adjustSingle(setReturnRate, returnRate, -1)} className="flex-1 text-sm py-3 bg-orange-100 text-orange-700 rounded-lg hover:bg-orange-200 transition-colors border border-orange-200 font-bold shadow-sm leading-tight">-</button>
+                                            <button onClick={() => adjustSingle(setReturnRate, returnRate, 1)} className="flex-1 text-sm py-3 bg-orange-100 text-orange-700 rounded-lg hover:bg-orange-200 transition-colors border border-orange-200 font-bold shadow-sm leading-tight">+</button>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-medium text-gray-700 mb-1">新客占比 (%)</label>
+                                        <input type="number" className="w-full p-2 border border-orange-300 rounded-lg focus:ring-1 focus:ring-orange-500 outline-none text-sm bg-orange-50" value={newCustRate} onChange={(e) => setNewCustRate(e.target.value)} placeholder="默认: 100" />
+                                        <div className="flex gap-1 mt-1.5">
+                                            {[50, 70, 80, 100].map(val => (
+                                                <button key={val} onClick={() => setNewCustRate(val)} className="flex-1 text-[10px] py-1 bg-orange-50 text-orange-700 rounded hover:bg-orange-100 transition-colors border border-orange-100">{val}%</button>
+                                            ))}
+                                        </div>
+                                        <div className="flex gap-1 mt-4">
+                                            <button onClick={() => adjustSingle(setNewCustRate, newCustRate, -1)} className="flex-1 text-sm py-3 bg-orange-100 text-orange-700 rounded-lg hover:bg-orange-200 transition-colors border border-orange-200 font-bold shadow-sm leading-tight">-</button>
+                                            <button onClick={() => adjustSingle(setNewCustRate, newCustRate, 1)} className="flex-1 text-sm py-3 bg-orange-100 text-orange-700 rounded-lg hover:bg-orange-200 transition-colors border border-orange-200 font-bold shadow-sm leading-tight">+</button>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-medium text-gray-700 mb-1">月固定成本</label>
+                                        <input type="number" className="w-full p-2 border border-orange-300 rounded-lg focus:ring-1 focus:ring-orange-500 outline-none text-sm bg-orange-50" value={monthlyFixedCost} onChange={(e) => setMonthlyFixedCost(e.target.value)} placeholder="元" />
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="bg-white p-5 rounded-xl shadow-sm border border-blue-200 relative overflow-hidden">
+                                <div className="absolute top-0 left-0 w-1.5 h-full bg-blue-500"></div>
+                                <h2 className="text-base font-bold mb-1 text-gray-800">步骤 3：数据提取确认与修改</h2>
+                                <p className="text-xs text-gray-500 mb-4">系统自动识别结果，可手动微调。只填一个框视为固定值。</p>
+                                
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="col-span-2 sm:col-span-1">
+                                        <label className="text-xs font-bold text-blue-700 mb-1 block">统计总天数 (关键)</label>
+                                        <div className="flex items-center gap-1">
+                                            <input type="number" className="w-full p-1.5 border border-blue-300 rounded-lg focus:ring-1 focus:ring-blue-500 outline-none text-sm bg-blue-50 text-center" value={extDays} onChange={(e) => setExtDays(e.target.value)} placeholder="如: 30" />
+                                            <span className="text-blue-700 opacity-80 text-xs font-bold shrink-0">天</span>
+                                        </div>
+                                    </div>
+                                    <div className="col-span-2 sm:col-span-1">
+                                        <RangeInput label="客单价 / 笔单价" suffix="元" minVal={extAovMin} setMin={setExtAovMin} maxVal={extAovMax} setMax={setExtAovMax} step={5} color="emerald" />
+                                    </div>
+                                    <div className="col-span-2 sm:col-span-1">
+                                        <RangeInput label="成交转化率" suffix="%" minVal={extCvrMin} setMin={setExtCvrMin} maxVal={extCvrMax} setMax={setExtCvrMax} step={0.2} color="purple" />
+                                    </div>
+                                    <div className="col-span-2 sm:col-span-1">
+                                        <RangeInput label="成交总笔数" suffix="万笔" minVal={extTxnMin} setMin={setExtTxnMin} maxVal={extTxnMax} setMax={setExtTxnMax} step={0.2} color="rose" minSubtext={calcDailyTxnStr(extTxnMin)} maxSubtext={calcDailyTxnStr(extTxnMax)} />
+                                    </div>
+                                    <div className="col-span-2 sm:col-span-1">
+                                        <RangeInput label="整体访客(PV/UV)" suffix="万" minVal={extPvMin} setMin={setExtPvMin} maxVal={extPvMax} setMax={setExtPvMax} color="cyan" />
+                                    </div>
+                                    <div className="col-span-2 sm:col-span-1">
+                                        <RangeInput label="付费点击总量" suffix="万次" minVal={extClickMin} setMin={setExtClickMin} maxVal={extClickMax} setMax={setExtClickMax} color="amber" />
+                                    </div>
+                                    <div className="col-span-2 sm:col-span-1">
+                                        <RangeInput label="单次点击成本(PPC)" suffix="元" minVal={extPpcMin} setMin={setExtPpcMin} maxVal={extPpcMax} setMax={setExtPpcMax} step={0.1} color="indigo" />
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* 右侧结果区 */}
+                        <div className="xl:col-span-7">
+                            <div className="bg-white p-5 md:p-6 rounded-xl shadow-sm border border-gray-200 h-full">
+                                <h2 className="text-xl font-bold mb-6 text-gray-900 border-b pb-3 flex flex-col sm:flex-row justify-between items-start sm:items-end gap-2">
+                                    <span>核算与推演结果面板</span>
+                                    {analyzedData && analyzedData.isCrossValidated && (
+                                        <span className="text-xs font-normal px-2.5 py-1 bg-green-100 text-green-700 rounded-full border border-green-200 flex items-center gap-1">
+                                            <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"></path></svg>
+                                            交叉验证挤水启动
+                                        </span>
+                                    )}
+                                </h2>
+
+                                {!analyzedData ? (
+                                    <div className="flex flex-col items-center justify-center h-[500px] text-gray-400 bg-gray-50 rounded-lg border border-dashed border-gray-300">
+                                        <svg className="w-16 h-16 mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                                        <p>请在左侧录入数据，系统将自动开始推演...</p>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-6 animate-fade-in">
+                                        <section className="grid grid-cols-2 md:grid-cols-4 gap-3 bg-gray-50 p-3.5 rounded-lg border border-gray-200">
+                                            <div><p className="text-xs text-gray-500">统计分析天数</p><p className="font-bold text-sm text-blue-800">{analyzedData.days} 天</p></div>
+                                            <div className="hidden md:block"><p className="text-xs text-gray-500">周期记录</p><p className="font-bold text-sm truncate" title={analyzedData.dateStr}>{analyzedData.dateStr}</p></div>
+                                            <div><p className="text-xs text-gray-500">日均固定成本</p><p className="font-bold text-sm text-orange-600">{formatCurrency(analyzedData.dailyFixedCost)}</p></div>
+                                            <div><p className="text-xs text-gray-500">期间总固定成本</p><p className="font-bold text-sm text-orange-600">{formatCurrency(analyzedData.totalFixedCost)}</p></div>
+                                        </section>
+
+                                        {/* 策略健康度诊断模块 */}
+                                        <section className="bg-white p-4 md:p-5 rounded-xl border border-indigo-100 shadow-sm relative overflow-hidden">
+                                            <div className="absolute top-0 left-0 w-1.5 h-full bg-indigo-500"></div>
+                                            <h3 className="font-bold text-base text-gray-800 mb-4 flex items-center gap-2">
+                                                <span className="text-indigo-600">
+                                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                                                </span>
+                                                策略健康度诊断与竞价极限分析
+                                            </h3>
+                                            
+                                            <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3 mb-4">
+                                                <div className="bg-indigo-50/70 p-3 rounded-lg border border-indigo-100/50 flex flex-col justify-center">
+                                                    <p className="text-xs text-gray-500 mb-1 cursor-help border-b border-dashed border-gray-400 inline-block w-max" title="＝ 全店总营业额 ÷ 广告总花费&#10;用途：衡量广告投入对全店销售的拉动效率（含自然流量红利）&#10;特点：数值高，但不反映真实利润">全店中位ROI ℹ️</p>
+                                                    <p className="font-bold text-lg text-indigo-700">{analyzedData.steady.roi.toFixed(2)}</p>
+                                                </div>
+                                                <div className="bg-indigo-50/70 p-3 rounded-lg border border-indigo-100/50 flex flex-col justify-center">
+                                                    <p className="text-xs text-gray-500 mb-1 cursor-help border-b border-dashed border-gray-400 inline-block w-max" title="＝（全店 GMV × (1 − 退货率)）÷ 广告花费&#10;用途：评估每1元广告带来的真实有效成交额，判断投放是否健康。&#10;特点：&#10;  - 剔除退货，含自然流量，反映真实销售效率；&#10;  - 高退货类目必备指标；&#10;  - 需 ≥ 保本 ROI（= 1 ÷ 毛利率 ÷ 签收率）才不亏变动成本。">全店净有效ROI ℹ️</p>
+                                                    {analyzedData.conservative.netRoi === analyzedData.optimistic.netRoi ? (
+                                                        <p className={`font-bold text-lg ${analyzedData.steady.netRoi >= analyzedData.steady.breakevenRoi ? 'text-green-600' : 'text-red-500'}`}>{analyzedData.steady.netRoi.toFixed(2)}</p>
+                                                    ) : (
+                                                        <div className="text-xs space-y-0.5 mt-0.5 w-full">
+                                                            <div className="flex justify-between items-center gap-1"><span className="text-gray-600">最差:</span><span className="font-bold text-gray-800">{analyzedData.conservative.netRoi.toFixed(2)}</span></div>
+                                                            <div className="flex justify-between items-center gap-1"><span className="text-gray-600">中位:</span><span className={`font-bold text-sm ${analyzedData.steady.netRoi >= analyzedData.steady.breakevenRoi ? 'text-green-600' : 'text-red-500'}`}>{analyzedData.steady.netRoi.toFixed(2)}</span></div>
+                                                            <div className="flex justify-between items-center gap-1"><span className="text-gray-600">最佳:</span><span className="font-bold text-gray-800">{analyzedData.optimistic.netRoi.toFixed(2)}</span></div>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                <div className="bg-indigo-50/70 p-3 rounded-lg border border-indigo-100/50 flex flex-col justify-center">
+                                                    <p className="text-xs text-gray-500 mb-1 cursor-help border-b border-dashed border-gray-400 inline-block w-max" title={getAdNetRoiTooltip()}>广告净ROI ℹ️</p>
+                                                    {analyzedData.conservative.adNetRoi === analyzedData.optimistic.adNetRoi ? (
+                                                        <p className={`font-bold text-lg ${analyzedData.steady.adNetRoi >= 1 ? 'text-green-600' : 'text-red-500'}`}>{analyzedData.steady.adNetRoi.toFixed(2)}</p>
+                                                    ) : (
+                                                        <div className="text-xs space-y-0.5 mt-0.5 w-full">
+                                                            <div className="flex justify-between items-center gap-1"><span className="text-gray-600">最差:</span><span className="font-bold text-gray-800">{analyzedData.conservative.adNetRoi.toFixed(2)}</span></div>
+                                                            <div className="flex justify-between items-center gap-1"><span className="text-gray-600">中位:</span><span className={`font-bold text-sm ${analyzedData.steady.adNetRoi >= 1 ? 'text-green-600' : 'text-red-500'}`}>{analyzedData.steady.adNetRoi.toFixed(2)}</span></div>
+                                                            <div className="flex justify-between items-center gap-1"><span className="text-gray-600">最佳:</span><span className="font-bold text-gray-800">{analyzedData.optimistic.adNetRoi.toFixed(2)}</span></div>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                <div className="bg-indigo-50/70 p-3 rounded-lg border border-indigo-100/50 flex flex-col justify-center">
+                                                    <p className="text-xs text-gray-500 mb-1 cursor-help border-b border-dashed border-gray-400 inline-block w-max" title="＝ （广告引导成交笔数 ÷ 付费点击量） × 100%">实际付费转化率 ℹ️</p>
+                                                    {analyzedData.conservative.paidCvr === analyzedData.optimistic.paidCvr ? (
+                                                        <p className="font-bold text-lg text-indigo-700">{analyzedData.steady.paidCvr.toFixed(2)}%</p>
+                                                    ) : (
+                                                        <div className="text-xs space-y-0.5 mt-0.5 w-full">
+                                                            <div className="flex justify-between items-center gap-1"><span className="text-gray-600">最差:</span><span className="font-bold text-gray-800">{analyzedData.conservative.paidCvr.toFixed(2)}%</span></div>
+                                                            <div className="flex justify-between items-center gap-1"><span className="text-gray-600">中位:</span><span className="font-bold text-sm text-indigo-700">{analyzedData.steady.paidCvr.toFixed(2)}%</span></div>
+                                                            <div className="flex justify-between items-center gap-1"><span className="text-gray-600">最佳:</span><span className="font-bold text-gray-800">{analyzedData.optimistic.paidCvr.toFixed(2)}%</span></div>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                <div className="bg-indigo-50/70 p-3 rounded-lg border border-indigo-100/50 flex flex-col justify-center">
+                                                    <div className="mb-1">
+                                                        <p className="text-xs text-gray-500 cursor-help border-b border-dashed border-gray-400 inline-block" title="＝ 1 ÷ [ 毛利率 × (1 − 退货率) ]&#10;用途：判断广告或全店是否真正保本——即每花1元广告费，至少需要带来多少元GMV才能不亏钱&#10;特点：只由毛利率和退货率决定，与实际花费无关；是盈亏的“及格线”，不是实际表现">全店保本ROI线 ℹ️</p>
+                                                        <p className="text-[10px] text-gray-400 mt-0.5">(毛利率退货率所决定)</p>
+                                                    </div>
+                                                    <p className="font-bold text-lg text-gray-700">{analyzedData.steady.breakevenRoi.toFixed(2)}</p>
+                                                </div>
+                                                <div className="bg-orange-50/80 p-3 rounded-lg border border-orange-200 flex flex-col justify-center">
+                                                    <div className="flex items-center gap-1 mb-1">
+                                                        <svg className="w-3.5 h-3.5 text-orange-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                                                        <p className="text-xs text-orange-700 font-semibold cursor-help border-b border-dashed border-orange-400" title="＝ 客单价 × 毛利率 × (1 − 退货率) × 成交转化率&#10;用途：测算在当前利润模型下，单次广告点击最多能花多少钱才不亏钱；用于指导出价上限和投放策略&#10;特点：&#10;  - 分 保守 / 中性 / 乐观 三档，对应转化率区间的取值，覆盖经营不确定性&#10;  - 数值通常远低于实际PPC（尤其高退货、低转化类目），揭示“广告自身是否盈利”&#10;  - 仅反映变动成本盈亏，未含平台佣金、人工等固定成本">极限保本PPC ℹ️</p>
+                                                    </div>
+                                                    {analyzedData.conservative.maxBreakevenPpc === analyzedData.optimistic.maxBreakevenPpc ? (
+                                                        <p className="font-bold text-lg text-orange-700">{analyzedData.steady.maxBreakevenPpc.toFixed(1)}</p>
+                                                    ) : (
+                                                        <div className="text-xs space-y-0.5 mt-0.5 w-full">
+                                                            <div className="flex justify-between items-center gap-1"><span className="text-orange-600/80">保守:</span><span className="font-bold text-gray-800">{analyzedData.conservative.maxBreakevenPpc.toFixed(1)}</span></div>
+                                                            <div className="flex justify-between items-center gap-1"><span className="text-orange-600/80">中性:</span><span className="font-bold text-sm text-orange-700">{analyzedData.steady.maxBreakevenPpc.toFixed(1)}</span></div>
+                                                            <div className="flex justify-between items-center gap-1"><span className="text-orange-600/80">乐观:</span><span className="font-bold text-gray-800">{analyzedData.optimistic.maxBreakevenPpc.toFixed(1)}</span></div>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+
+                                            {/* 全新重构的多维智能健康诊断面板 */}
+                                            {analyzedData.diag && (
+                                                <div className={`p-4 md:p-5 rounded-xl border ${analyzedData.diag.grade === 'C' ? 'bg-red-50 border-red-200 shadow-sm shadow-red-100' : (analyzedData.diag.grade === 'B' ? 'bg-orange-50 border-orange-200 shadow-sm shadow-orange-100' : 'bg-green-50 border-green-200 shadow-sm shadow-green-100')}`}>
+                                                    <h4 className={`font-bold text-sm md:text-base mb-3 flex items-center gap-1.5 ${analyzedData.diag.grade === 'C' ? 'text-red-800' : (analyzedData.diag.grade === 'B' ? 'text-orange-800' : 'text-green-800')}`}>
+                                                        {analyzedData.diag.grade === 'C' ? (
+                                                            <svg className="w-5 h-5 shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd"></path></svg>
+                                                        ) : (
+                                                            <svg className="w-5 h-5 shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd"></path></svg>
+                                                        )}
+                                                        多维综合智能诊断报告
+                                                    </h4>
+                                                    
+                                                    <div className="space-y-4 text-[13px] leading-relaxed">
+                                                        <p className="text-gray-900 text-sm">
+                                                            <span className="font-bold">【定性结论】</span>
+                                                            该经营模型处于 <span className={`font-bold text-base ${analyzedData.diag.profitStatus==='亏损'?'text-red-600':'text-green-700'}`}>{analyzedData.diag.profitStatus}</span> 状态，健康等级为：
+                                                            <span className={`font-bold text-sm px-2 py-0.5 rounded text-white mx-0.5 shadow-sm ${analyzedData.diag.grade === 'C' ? 'bg-red-500' : (analyzedData.diag.grade === 'B' ? 'bg-orange-500' : 'bg-green-600')}`}>{analyzedData.diag.grade}级</span>，
+                                                            建议执行策略为：<span className="font-bold underline decoration-2 underline-offset-4 mx-0.5">{analyzedData.diag.scaling}</span>。
+                                                        </p>
+                                                        
+                                                        <div className={`p-2.5 rounded-lg border ${analyzedData.diag.grade === 'C' ? 'bg-red-100/50 border-red-200/60' : (analyzedData.diag.grade === 'B' ? 'bg-orange-100/50 border-orange-200/60' : 'bg-green-100/50 border-green-200/60')}`}>
+                                                            <span className={`font-bold block mb-1 ${analyzedData.diag.grade === 'C' ? 'text-red-900' : (analyzedData.diag.grade === 'B' ? 'text-orange-900' : 'text-green-900')}`}>⚠️ 核心风险警示：</span>
+                                                            <span className={analyzedData.diag.grade === 'C' ? 'text-red-800 font-semibold' : 'text-gray-800 font-medium'}>{analyzedData.diag.riskStr}。</span>
+                                                        </div>
+
+                                                        <div>
+                                                            <span className="font-bold text-gray-900">【深度切片分析】</span>
+                                                            <ul className="list-disc pl-5 mt-1.5 text-gray-700 space-y-1.5">
+                                                                {analyzedData.diag.mdaLines.map((line, i) => (
+                                                                    <li key={i}>{line}</li>
+                                                                ))}
+                                                            </ul>
+                                                        </div>
+
+                                                        <div>
+                                                            <span className="font-bold text-gray-900 block mb-1.5">【高优优化方向】</span>
+                                                            <ul className="list-decimal pl-5 text-blue-800 space-y-1.5 font-medium bg-white/40 p-3 rounded border border-white/60">
+                                                                {analyzedData.diag.adviceLines.map((line, i) => (
+                                                                    <li key={i} className="pl-1">{line}</li>
+                                                                ))}
+                                                            </ul>
+                                                        </div>
+
+                                                        <div className="bg-white/70 p-2.5 rounded shadow-sm border border-gray-200/60 text-center flex justify-around items-center">
+                                                            <span className="text-gray-600">保本ROAS线：<span className="font-bold text-gray-900 text-sm ml-0.5">{analyzedData.diag.breakevenRoi.toFixed(2)}</span></span>
+                                                            <span className="text-gray-300">|</span>
+                                                            <span className="text-gray-600">当前实际ROI：<span className={`font-bold text-sm ml-0.5 ${analyzedData.diag.roi >= analyzedData.diag.breakevenRoi ? 'text-green-600' : 'text-red-600'}`}>{analyzedData.diag.roi.toFixed(1)}</span></span>
+                                                            <span className="text-gray-300">|</span>
+                                                            <span className="text-gray-600">有效净毛利率：<span className="font-bold text-gray-900 text-sm ml-0.5">{analyzedData.diag.effectiveMargin.toFixed(1)}%</span></span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </section>
+
+                                        <section>
+                                            <h3 className="font-bold text-base text-gray-700 mb-3 flex items-center gap-2">
+                                                <span className="w-1 h-4 bg-gray-800 rounded"></span> 极限还原推演模型
+                                            </h3>
+                                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                                {['conservative', 'steady', 'optimistic'].map((tier, idx) => {
+                                                    const titles = ['悲观 (承受底线)', '稳健 (常规预期)', '乐观 (理想状态)'];
+                                                    const bgColors = ['bg-red-50/50', 'bg-blue-50/50', 'bg-green-50/50'];
+                                                    const borderColors = ['border-red-200', 'border-blue-200', 'border-green-200'];
+                                                    const textColors = ['text-red-800', 'text-blue-800', 'text-green-800'];
+                                                    const data = analyzedData[tier];
+                                                    const isProfit = data.monthlyNetProfit >= 0;
+                                                    return (
+                                                        <div key={tier} className={`border rounded-xl p-4 shadow-sm ${bgColors[idx]} ${borderColors[idx]}`}>
+                                                            <div className={`font-bold text-center mb-3 pb-2 border-b border-gray-200/50 ${textColors[idx]}`}>{titles[idx]}</div>
+                                                            <div className="mb-3 p-2 bg-white/60 rounded text-xs space-y-1.5 text-gray-600 border border-white">
+                                                                <div className="flex justify-between"><span>推算客单:</span><span className="font-bold text-gray-800">{formatCurrency(data.aov)}</span></div>
+                                                                <div className="flex justify-between"><span>月推算笔数:</span><span className="font-bold text-gray-800">{formatCount(data.monthlyTxns)}笔</span></div>
+                                                                <div className="flex justify-between"><span>日推算笔数:</span><span className="font-bold text-blue-700">{formatCount(data.dailyTxns)}笔/天</span></div>
+                                                            </div>
+                                                            <div className="space-y-2 text-sm">
+                                                                <div className="flex justify-between"><span>月营业额:</span><span className="font-semibold text-gray-800">{formatCurrency(data.monthlyRevenue)}</span></div>
+                                                                <div className="flex justify-between"><span>月实际成交:</span><span className="font-semibold text-gray-800">{formatCurrency(data.monthlyActualRevenue)}</span></div>
+                                                                <div className="flex justify-between"><span>月推广花费:</span><span className="font-semibold text-red-500">{formatCurrency(data.monthlyPaid)}</span></div>
+                                                                <div className="pt-2 mt-2 border-t border-dashed border-gray-200/70 space-y-1 text-xs">
+                                                                    <div className="flex justify-between"><span>日营业额:</span><span>{formatCurrency(data.dailyRevenue)}</span></div>
+                                                                    <div className="flex justify-between"><span>日实际成交:</span><span>{formatCurrency(data.dailyActualRevenue)}</span></div>
+                                                                    <div className="flex justify-between text-red-500"><span>日推广费:</span><span>{formatCurrency(data.dailyPaid)}</span></div>
+                                                                    <div className="flex justify-between"><span>日净利润:</span><span className={data.dailyNetProfit >= 0 ? 'text-green-600' : 'text-red-500'}>{formatCurrency(data.dailyNetProfit)}</span></div>
+                                                                </div>
+                                                                <div className="flex justify-between items-center pt-3 border-t border-gray-200/50 mt-2">
+                                                                    <span className="text-gray-900 font-bold">月净利润:</span>
+                                                                    <span className={`font-black text-lg ${isProfit ? 'text-green-600' : 'text-red-600'}`}>{formatCurrency(data.monthlyNetProfit)}</span>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        </section>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
