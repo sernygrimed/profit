@@ -1,0 +1,1686 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>今日业绩分析系统</title>
+    <!-- 引入 Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 引入 React 和 ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <!-- 引入 Babel 转换 JSX -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <!-- 引入强大的 Excel 解析引擎 SheetJS -->
+    <script src="https://unpkg.com/xlsx/dist/xlsx.full.min.js"></script>
+    <style>
+        body {
+            font-family: "SimSun", "Songti SC", "STSong", serif;
+            background-color: #f3f4f6;
+        }
+        /* 强制数字使用黑体/无衬线字体，保证数字等高工整，绝不使用艺术字 */
+        .number-font {
+            font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Helvetica, Arial, "PingFang SC", "Microsoft YaHei", sans-serif;
+            font-variant-numeric: tabular-nums;
+        }
+        /* 隐藏数字输入框的上下箭头 */
+        input[type=number]::-webkit-inner-spin-button, 
+        input[type=number]::-webkit-outer-spin-button { 
+            -webkit-appearance: none; 
+            margin: 0; 
+        }
+        input[type=number] {
+            -moz-appearance: textfield;
+        }
+        /* 自定义滚动条 */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        
+        button:active { transform: scale(0.96); }
+        .preset-btn { white-space: nowrap; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useCallback, useMemo } = React;
+
+        // 图标组件
+        const IconCalculator = ({ className }) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><rect width="16" height="20" x="4" y="2" rx="2"/><line x1="8" x2="16" y1="6" y2="6"/><line x1="16" x2="16.01" y1="14" y2="14"/><line x1="16" x2="16.01" y1="18" y2="18"/><line x1="16" x2="16.01" y1="10" y2="10"/><line x1="12" x2="12.01" y1="14" y2="14"/><line x1="12" x2="12.01" y1="18" y2="18"/><line x1="12" x2="12.01" y1="10" y2="10"/><line x1="8" x2="8.01" y1="14" y2="14"/><line x1="8" x2="8.01" y1="18" y2="18"/><line x1="8" x2="8.01" y1="10" y2="10"/></svg>;
+        const IconStore = ({ className }) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="m2 7 4.41-4.41A2 2 0 0 1 7.83 2h8.34a2 2 0 0 1 1.42.59L22 7"/><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><path d="M15 22v-4a2 2 0 0 0-2-2h-2a2 2 0 0 0-2 2v4"/><path d="M2 7h20"/><path d="M22 7v3a2 2 0 0 1-2 2v0a2.7 2.7 0 0 0-.82 0A2.7 2.7 0 0 1 16 12a2.7 2.7 0 0 1-1.59-.63.7.7 0 0 0-.82 0A2.7 2.7 0 0 1 12 12a2.7 2.7 0 0 1-1.59-.63.7.7 0 0 0-.82 0A2.7 2.7 0 0 1 8 12a2.7 2.7 0 0 1-1.59-.63.7.7 0 0 0-.82 0A2.7 2.7 0 0 1 4 12v0a2 2 0 0 1-2-2V7"/></svg>;
+        const IconCopy = ({ className }) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>;
+        const IconCheckCircle = ({ className }) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="m9 11 3 3L22 4"/></svg>;
+        const IconTrash2 = ({ className }) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>;
+        const IconPlus = ({ className }) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M5 12h14"/><path d="M12 5v14"/></svg>;
+        const IconSettings = ({ className }) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>;
+        const IconX = ({ className }) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>;
+        const IconMinus = ({ className }) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M5 12h14"/></svg>;
+        const IconUpload = ({ className }) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>;
+        const IconBarChart = ({ className }) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>;
+        const IconCalendar = ({ className }) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></svg>;
+        const IconFolder = ({ className }) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-1.22-1.8A2 2 0 0 0 7.53 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/></svg>;
+        const IconFile = ({ className }) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg>;
+        const IconSparkles = ({ className }) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/><path d="M5 3v4"/><path d="M19 17v4"/><path d="M3 5h4"/><path d="M17 19h4"/></svg>;
+        const IconEye = ({ className }) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>;
+        const IconEyeOff = ({ className }) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"/><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"/><path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"/><line x1="2" x2="22" y1="2" y2="22"/></svg>;
+
+        const formatMoney = (num) => Math.round(Number(num || 0)).toString();
+        const stripZero = (num) => Number(num.toFixed(2));
+        
+        // 金额格式化带¥符号：处理正负数并带上人民币标识，负号和符号之间加空格分离
+        const toCurrency = (num) => {
+            const val = Math.round(Number(num || 0));
+            return val < 0 ? `- ¥${Math.abs(val)}` : `¥${val}`;
+        };
+
+        // 计算百分比
+        const calcPercent = (part, total) => {
+            if (!total || total <= 0) return '0%';
+            return ((part / total) * 100).toFixed(0) + '%';
+        };
+
+        // 智能缩放字号：针对汇总板块特别缩小的字号方案
+        const getDynamicTextClass = (valStr) => {
+            const len = String(valStr).length;
+            if (len >= 11) return "text-[10px] lg:text-[11px]";
+            if (len >= 9) return "text-[11px] lg:text-xs";
+            if (len >= 7) return "text-xs lg:text-sm";
+            return "text-sm lg:text-base";
+        };
+
+        // 强力内联编辑组件：解决光标跳动，并在失去焦点或回车时触发更新
+        const EditableNumber = ({ val, onChangeAction, suffix = "", prefix = "", colorClass = "text-blue-300", borderClass="border-blue-500/50" }) => {
+            const [localVal, setLocalVal] = useState(val);
+            useEffect(() => { setLocalVal(val); }, [val]);
+            
+            const handleBlur = () => {
+                if (String(localVal) !== String(val)) {
+                    onChangeAction(localVal);
+                }
+            };
+            const handleKeyDown = (e) => {
+                if (e.key === 'Enter') e.target.blur();
+            };
+
+            const displayStr = `${prefix}${localVal}${suffix}`;
+            const textSizeClass = getDynamicTextClass(displayStr);
+
+            return (
+                <div className={`flex items-center font-bold font-sans number-font ${colorClass} ${textSizeClass} w-full`}>
+                    {prefix && <span className="mr-0.5 flex-shrink-0">{prefix}</span>}
+                    <input 
+                        type="number"
+                        value={localVal}
+                        onChange={e => setLocalVal(e.target.value)}
+                        onBlur={handleBlur}
+                        onKeyDown={handleKeyDown}
+                        className={`bg-transparent border-b ${borderClass} flex-1 min-w-[20px] outline-none focus:border-current text-left lg:text-center appearance-none m-0 p-0`}
+                    />
+                    {suffix && <span className="ml-0.5 flex-shrink-0">{suffix}</span>}
+                </div>
+            );
+        }
+
+        function App() {
+            // ---- 全局状态 ----
+            const [activeTab, setActiveTab] = useState('daily'); 
+            const [hideProfit, setHideProfit] = useState(false); // 隐藏利润开关
+
+            const [settings, setSettings] = useState({
+                defaultGross: 55,
+                defaultReturn: 35,
+                defaultCost: 2000,
+                specificStores: [
+                    { id: '1', name: 'bh5381700', cost: '50000', gross: '55', return: '35' },
+                    { id: '2', name: 'lxhomeware', cost: '10000', gross: '55', return: '35' },
+                    { id: '3', name: '小锤子家的快递', cost: '4000', gross: '55', return: '35' },
+                    { id: '4', name: '店铺4', cost: '2000', gross: '55', return: '35' }
+                ]
+            });
+            const [showSettings, setShowSettings] = useState(false);
+            const [tempSettings, setTempSettings] = useState(settings);
+            const [error, setError] = useState("");
+            const [copied, setCopied] = useState(false);
+
+            // ---- 多店录入状态 ----
+            const [inputRows, setInputRows] = useState([
+                { id: 'bh5381700', revenue: '', spend: '' },
+                { id: 'lxhomeware', revenue: '', spend: '' },
+                { id: '小锤子家的快递', revenue: '', spend: '' }
+            ]);
+            const [results, setResults] = useState([]);
+            const [totalMonthlyProfit, setTotalMonthlyProfit] = useState(0);
+            const [totalProfitText, setTotalProfitText] = useState("");
+
+            // ---- CSV分析状态 ----
+            const [csvStoreId, setCsvStoreId] = useState('');
+            const [timeDimension, setTimeDimension] = useState('daily'); 
+            const [csvFileName, setCsvFileName] = useState("");
+            
+            // rawCsvData 保存所有店铺的所有原始解析数据
+            const [rawCsvData, setRawCsvData] = useState([]); 
+            
+            const availableStores = useMemo(() => {
+                const stores = new Set(rawCsvData.map(d => d.storeName));
+                const storesArray = Array.from(stores);
+                
+                storesArray.sort((a, b) => {
+                    const indexA = settings.specificStores.findIndex(s => s.name === a || String(s.id) === a);
+                    const indexB = settings.specificStores.findIndex(s => s.name === b || String(s.id) === b);
+                    
+                    if (indexA !== -1 && indexB !== -1) return indexA - indexB;
+                    if (indexA !== -1) return -1;
+                    if (indexB !== -1) return 1;
+                    return a.localeCompare(b);
+                });
+                return storesArray;
+            }, [rawCsvData, settings.specificStores]);
+
+            useEffect(() => {
+                if (availableStores.length > 0 && (!csvStoreId || !availableStores.includes(csvStoreId))) {
+                    setCsvStoreId(availableStores[0]);
+                }
+            }, [availableStores, csvStoreId]);
+
+            const [csvResults, setCsvResults] = useState([]);
+            const [csvSummary, setCsvSummary] = useState(null);
+
+            // 动态单位文字
+            const unitText = timeDimension === 'weekly' ? '周' : (timeDimension === 'monthly' ? '个月' : '天');
+
+            // ----------------------- 核心计算引擎 (单日多店) -----------------------
+            const runCalculation = useCallback((currInput, currSet) => {
+                const validRows = currInput.filter(r => r.id && r.revenue !== '' && r.spend !== '');
+                if (validRows.length === 0) {
+                    setResults([]);
+                    setTotalMonthlyProfit(0);
+                    return;
+                }
+
+                const newRes = []; 
+                let totalP = 0; 
+                let pArr = [];
+
+                for (let i = 0; i < currInput.length; i++) {
+                    const row = currInput[i]; 
+                    if (!row.id || row.revenue === '' || row.spend === '') continue;
+
+                    const id = row.id; 
+                    const rev = parseFloat(row.revenue); 
+                    const spd = parseFloat(row.spend);
+
+                    if (isNaN(rev) || isNaN(spd)) continue;
+
+                    const spec = currSet.specificStores.find(s => String(s.id) === id || s.name === id);
+                    const mCost = (spec && spec.cost !== '') ? parseFloat(spec.cost) : parseFloat(currSet.defaultCost);
+                    const gRate = (spec && spec.gross !== '') ? parseFloat(spec.gross) : parseFloat(currSet.defaultGross);
+                    const rRate = (spec && spec.return !== '') ? parseFloat(spec.return) : parseFloat(currSet.defaultReturn);
+                    const dCost = mCost / 30; 
+                    const rDec = rRate / 100; 
+                    const gDec = gRate / 100;
+                    
+                    const effRev = rev * (1 - rDec); 
+                    // 加入8%补单无效剔除后的真实净营业额
+                    const realEffRev = effRev * 0.92;
+                    const vROI = spd > 0 ? rev / spd : 0; 
+                    const nROI = spd > 0 ? realEffRev / spd : 0;
+                    
+                    const gProfit = realEffRev * gDec; 
+                    const nProfit = gProfit - spd - dCost; 
+                    const mNProfit = nProfit * 30;
+
+                    let sc = 0; let lv = ""; let scC = "";
+                    if (vROI < 6.0) { sc = Math.min(vROI * 10, 59); lv = "不合格"; scC = `min(${stripZero(vROI)}×10, 59)`; }
+                    else if (vROI < 6.8) { sc = 60 + (vROI - 6.0) * 30; lv = "合格"; scC = `60 + (${stripZero(vROI)} - 6.0)×30`; }
+                    else if (vROI < 8.5) { sc = 90 + (vROI - 6.8) * 5; lv = "合格"; scC = `90 + (${stripZero(vROI)} - 6.8)×5`; }
+                    else { sc = 96 + (vROI - 8.6) * 4; lv = "优秀"; scC = `96 + (${stripZero(vROI)} - 8.6)×4`; }
+                    sc = Math.min(sc, 100);
+
+                    const rows = [
+                        { name: "今日营业额", result: toCurrency(rev), calc: "/" },
+                        { name: "今日付费", result: toCurrency(spd), calc: "/" },
+                        { name: "月固定成本", result: toCurrency(mCost), calc: "/" },
+                        { name: "日固定成本", result: toCurrency(dCost), calc: `${toCurrency(mCost)}÷30` },
+                        { name: "有效营业额", result: toCurrency(effRev), calc: `${toCurrency(rev)}×(1 - ${rRate}%)` },
+                        { name: "今日虚投产(虚ROI)", result: vROI.toFixed(2), calc: `${toCurrency(rev)}÷${toCurrency(spd)}`, isVROI: true, val: vROI },
+                        { name: "真实净投产(剔8%补单)", result: nROI.toFixed(2), calc: `(${toCurrency(effRev)}×92%)÷${toCurrency(spd)}`, isNROI: true, val: nROI },
+                        { name: "真实毛利额(剔8%补单)", result: toCurrency(gProfit), calc: `${toCurrency(effRev)}×92%×${gRate}%`, isProfit: true },
+                        { name: "今日净利润", result: toCurrency(nProfit), calc: `${toCurrency(gProfit)} - ${toCurrency(spd)} - ${toCurrency(dCost)}`, isProfit: true, val: nProfit },
+                        { name: "月预估净利润", result: toCurrency(mNProfit), calc: `${toCurrency(nProfit)}×30`, isProfit: true, val: mNProfit },
+                        { name: "今日业绩评分", result: `${sc.toFixed(0)} 分`, calc: scC + "（四舍五入后）", isScore: true, val: sc },
+                        { name: "业绩等级", result: lv, calc: "/", isLevel: true, val: lv }
+                    ];
+                    newRes.push({ id, name: spec?.name || id, tableRows: rows }); 
+                    totalP += mNProfit; 
+                    pArr.push(`${spec?.name || id}预估`);
+                }
+
+                setResults(newRes); 
+                setTotalMonthlyProfit(totalP); 
+                setTotalProfitText(pArr.join(" + "));
+            }, []);
+
+            useEffect(() => {
+                if (activeTab === 'daily') runCalculation(inputRows, settings);
+            }, [inputRows, settings, runCalculation, activeTab]);
+
+            // ----------------------- 核心计算引擎 (CSV聚合计算) -----------------------
+            const aggregateData = useCallback((data, dimension) => {
+                if (!data || data.length === 0) return [];
+
+                // 核心：强制所有原始数据按照日期降序排列（最新日期在最前面）
+                const sortedData = [...data].sort((a, b) => {
+                    const dateA = new Date(a.date.replace(/-/g, '/')).getTime();
+                    const dateB = new Date(b.date.replace(/-/g, '/')).getTime();
+                    return dateB - dateA;
+                });
+
+                if (dimension === 'daily') {
+                    return sortedData.map(d => ({ ...d, label: d.date, daysInGroup: 1 }));
+                }
+
+                const aggregatedMap = new Map();
+
+                sortedData.forEach(row => {
+                    const parsedDate = new Date(row.date.replace(/-/g, '/'));
+                    let key = "";
+                    let label = "";
+                    let sortKey = parsedDate.getTime(); // 记录用于排序的时间戳
+
+                    if (dimension === 'weekly') {
+                        const day = parsedDate.getDay();
+                        const diff = parsedDate.getDate() - day + (day === 0 ? -6 : 1);
+                        const sOfWeek = new Date(parsedDate);
+                        sOfWeek.setDate(diff);
+                        
+                        const eOfWeek = new Date(sOfWeek);
+                        eOfWeek.setDate(eOfWeek.getDate() + 6);
+                        
+                        const sM = String(sOfWeek.getMonth() + 1).padStart(2, '0');
+                        const sD = String(sOfWeek.getDate()).padStart(2, '0');
+                        const eM = String(eOfWeek.getMonth() + 1).padStart(2, '0');
+                        const eD = String(eOfWeek.getDate()).padStart(2, '0');
+                        
+                        key = `${sOfWeek.getFullYear()}-${sM}-${sD}`;
+                        // 使用带换行的标记替换原来的一行文本
+                        label = `${sM}/${sD}\n至\n${eM}/${eD}`;
+                        sortKey = sOfWeek.getTime();
+                    } else if (dimension === 'monthly') {
+                        const y = parsedDate.getFullYear();
+                        const m = String(parsedDate.getMonth() + 1).padStart(2, '0');
+                        key = `${y}-${m}`;
+                        label = `${y}年${m}月`;
+                        sortKey = new Date(y, parsedDate.getMonth(), 1).getTime();
+                    }
+
+                    if (!aggregatedMap.has(key)) {
+                        aggregatedMap.set(key, {
+                            label,
+                            sortKey,
+                            rev: 0,
+                            netRev: 0,
+                            spend: 0,
+                            spendAll: 0,
+                            spendKeyword: 0,
+                            spendCrowd: 0,
+                            _rawRows: [],
+                            daysInGroup: 0
+                        });
+                    }
+
+                    const group = aggregatedMap.get(key);
+                    group.rev += row.rev;
+                    group.netRev += row.netRev;
+                    group.spend += row.spend;
+                    group.spendAll += (row.spendAll || 0);
+                    group.spendKeyword += (row.spendKeyword || 0);
+                    group.spendCrowd += (row.spendCrowd || 0);
+                    group._rawRows.push(row);
+                    group.daysInGroup += 1;
+                });
+
+                // 将聚合后的数据提取为数组，并明确按组的时间戳倒序排列
+                const aggregatedArray = Array.from(aggregatedMap.values()).sort((a, b) => b.sortKey - a.sortKey);
+
+                return aggregatedArray.map(group => {
+                    // 对聚合数据也仅取有营业额的日子计算平均退款率
+                    const validRowsForRefund = group._rawRows.filter(r => r.rev > 0);
+                    const vCount = validRowsForRefund.length || 1;
+                    const avgRefundRate = validRowsForRefund.reduce((sum, r) => sum + r.refundRate, 0) / vCount;
+                    const avgSignRefundRate = validRowsForRefund.reduce((sum, r) => sum + r.signRefundRate, 0) / vCount;
+                    
+                    return {
+                        label: group.label,
+                        rev: group.rev,
+                        netRev: group.netRev,
+                        spend: group.spend,
+                        spendAll: group.spendAll,
+                        spendKeyword: group.spendKeyword,
+                        spendCrowd: group.spendCrowd,
+                        refundRate: avgRefundRate,
+                        signRefundRate: avgSignRefundRate,
+                        daysInGroup: group.daysInGroup,
+                        fileDim: dimension
+                    };
+                });
+            }, []);
+
+            const calculateCSV = useCallback(() => {
+                if (!rawCsvData || rawCsvData.length === 0 || !csvStoreId) {
+                    setCsvResults([]);
+                    setCsvSummary(null);
+                    return;
+                }
+
+                const storeRawData = rawCsvData.filter(d => d.storeName === csvStoreId);
+
+                if (storeRawData.length === 0) {
+                    setCsvResults([]);
+                    setCsvSummary(null);
+                    return;
+                }
+
+                const spec = settings.specificStores.find(s => s.name === csvStoreId || String(s.id) === String(csvStoreId));
+                // 获取月固定成本，始终保持为按月设置的基准
+                const mCost = (spec && spec.cost !== '') ? parseFloat(spec.cost) : parseFloat(settings.defaultCost);
+                const gRate = (spec && spec.gross !== '') ? parseFloat(spec.gross) : parseFloat(settings.defaultGross);
+                
+                const dCost = mCost / 30; 
+                const gDec = gRate / 100;
+
+                let targetData = storeRawData.filter(d => d.fileDim === timeDimension);
+
+                if (targetData.length === 0 && timeDimension !== 'daily') {
+                    const dailyData = storeRawData.filter(d => d.fileDim === 'daily');
+                    if (dailyData.length > 0) {
+                        targetData = aggregateData(dailyData, timeDimension);
+                    }
+                }
+
+                if (targetData.length === 0) {
+                    setCsvResults([]);
+                    setCsvSummary(null);
+                    return;
+                }
+
+                let tRev = 0, tNetRev = 0, tSpd = 0, tNetProfit = 0, totalDaysInPeriod = 0;
+                
+                const computedRows = targetData.map(row => {
+                    const rev = row.rev; 
+                    const netRev = row.netRev; 
+                    const spd = row.spend;
+                    const spdAll = row.spendAll || 0;
+                    const spdKey = row.spendKeyword || 0;
+                    const spdCrowd = row.spendCrowd || 0;
+                    const refundRate = row.refundRate || 0; 
+                    const signRefundRate = row.signRefundRate || 0;
+                    
+                    // 退款金额
+                    const refundAmount = Math.max(0, rev - netRev);
+
+                    // 扣除8%补单/无效单后的真实净支付额
+                    const realNetRev = netRev * 0.92;
+                    
+                    const vROI = spd > 0 ? rev / spd : 0;
+                    const nROI = spd > 0 ? realNetRev / spd : 0;
+                    
+                    let days = row.daysInGroup; 
+                    if (!days) {
+                        if (row.fileDim === 'weekly') days = 7;
+                        else if (row.fileDim === 'monthly') days = 30;
+                        else days = 1;
+                    }
+
+                    // 当前周期对应的固定成本
+                    const rowFixedCost = dCost * days;
+
+                    const gProfit = realNetRev * gDec;
+                    const nProfit = gProfit - spd - rowFixedCost;
+
+                    tRev += rev;
+                    tNetRev += netRev;
+                    tSpd += spd;
+                    tNetProfit += nProfit;
+                    totalDaysInPeriod += days;
+
+                    return {
+                        label: row.label || row.date,
+                        rev,
+                        netRev,
+                        refundAmount, // 增加退款金额字段
+                        realNetRev, // 保存给后续汇总用
+                        spd,
+                        spdAll,
+                        spdKey,
+                        spdCrowd,
+                        fixedCost: rowFixedCost, // 保存推算的固定成本
+                        refundRate,
+                        signRefundRate,
+                        vROI,
+                        nROI,
+                        gProfit,
+                        nProfit,
+                        daysInGroup: days
+                    };
+                });
+
+                // 为平均值计算专门过滤：剔除营业额为0的数据
+                const validRows = computedRows.filter(r => r.rev > 0);
+                // 真正的有效天数，用于严格的日均推算
+                const validTotalDays = validRows.reduce((sum, r) => sum + r.daysInGroup, 0) || 1;
+
+                // 基于真正的有效天数来计算精准的日均与月均值
+                const validTotalRev = validRows.reduce((sum, r) => sum + r.rev, 0);
+                const validTotalNetRev = validRows.reduce((sum, r) => sum + r.netRev, 0);
+                const validTotalSpd = validRows.reduce((sum, r) => sum + r.spd, 0);
+                const validTotalRealNetRev = validRows.reduce((sum, r) => sum + r.realNetRev, 0);
+                
+                const dailyAvgRev = validTotalRev / validTotalDays;
+                const monthlyAvgRev = dailyAvgRev * 30;
+
+                const dailyAvgNetRev = validTotalNetRev / validTotalDays;
+                const monthlyAvgNetRev = dailyAvgNetRev * 30;
+                
+                const dailyAvgRefundAmount = Math.max(0, dailyAvgRev - dailyAvgNetRev);
+                const monthlyAvgRefundAmount = Math.max(0, monthlyAvgRev - monthlyAvgNetRev);
+
+                const dailyAvgSpd = validTotalSpd / validTotalDays;
+                const monthlyAvgSpd = dailyAvgSpd * 30;
+
+                const avgVROI = validTotalSpd > 0 ? validTotalRev / validTotalSpd : 0;
+                const avgNROI = validTotalSpd > 0 ? validTotalRealNetRev / validTotalSpd : 0;
+
+                // 核心去极值平均算法封装 (仅针对有营业额的有效行)
+                // 计算方式: (所有有效数值相加 - 两个极值) / (总个数 - 2)
+                const calculateTrimmedAvg = (values) => {
+                    if (values.length > 2) {
+                        const totalSum = values.reduce((sum, val) => sum + val, 0);
+                        const maxVal = Math.max(...values);
+                        const minVal = Math.min(...values);
+                        return (totalSum - maxVal - minVal) / (values.length - 2);
+                    } else if (values.length > 0) {
+                        return values.reduce((sum, val) => sum + val, 0) / values.length;
+                    }
+                    return 0;
+                };
+
+                const avgRefundRate = calculateTrimmedAvg(validRows.map(r => r.refundRate));
+                const avgSignRefundRate = calculateTrimmedAvg(validRows.map(r => r.signRefundRate));
+                
+                const totalFixedCost = dCost * totalDaysInPeriod;
+
+                setCsvResults(computedRows);
+                
+                // 由于数据已经是严格倒序排列，取首尾进行日期区间展示时需要反过来
+                const dateRangeEnd = computedRows.length > 0 ? computedRows[0].label : '';
+                const dateRangeStart = computedRows.length > 0 ? computedRows[computedRows.length - 1].label : '';
+
+                setCsvSummary({
+                    dateRangeStart,
+                    dateRangeEnd,
+                    totalRev: tRev,
+                    totalNetRev: tNetRev,
+                    totalSpd: tSpd,
+                    totalNetProfit: tNetProfit,
+                    totalFixedCost,
+                    dailyAvgRev,
+                    monthlyAvgRev,
+                    dailyAvgNetRev,
+                    monthlyAvgNetRev,
+                    dailyAvgRefundAmount,
+                    monthlyAvgRefundAmount,
+                    dailyAvgSpd,
+                    monthlyAvgSpd,
+                    avgVROI,
+                    avgNROI,
+                    avgRefundRate,
+                    avgSignRefundRate,
+                    totalDaysInPeriod,
+                    totalRows: targetData.length,
+                    validDaysCount: validTotalDays, // 修改为准确天数
+                    mCost, gRate 
+                });
+            }, [rawCsvData, csvStoreId, settings, timeDimension, aggregateData]);
+
+            useEffect(() => {
+                if (activeTab === 'csv') calculateCSV();
+            }, [rawCsvData, csvStoreId, settings, timeDimension, calculateCSV, activeTab]);
+
+            // ---- 在线内联修改汇总参数的逻辑 ----
+            const handleInlineSettingChange = useCallback((field, value) => {
+                const valNum = parseFloat(value);
+                if (isNaN(valNum)) return;
+
+                setSettings(prev => {
+                    const newStores = [...prev.specificStores];
+                    const specIdx = newStores.findIndex(s => s.name === csvStoreId || String(s.id) === String(csvStoreId));
+                    if (specIdx === -1) return prev; 
+
+                    if (field === 'gross') {
+                        newStores[specIdx].gross = String(valNum);
+                    } else if (field === 'mCost') {
+                        // value 直接为月固定成本
+                        newStores[specIdx].cost = Math.round(valNum).toString();
+                    }
+                    return { ...prev, specificStores: newStores };
+                });
+                
+                // 同步 tempSettings 保持设置弹窗的一致性
+                setTempSettings(prev => {
+                    const newStores = [...prev.specificStores];
+                    const specIdx = newStores.findIndex(s => s.name === csvStoreId || String(s.id) === String(csvStoreId));
+                    if (specIdx !== -1) {
+                        if (field === 'gross') {
+                            newStores[specIdx].gross = String(valNum);
+                        } else if (field === 'mCost') {
+                            newStores[specIdx].cost = Math.round(valNum).toString();
+                        }
+                    }
+                    return { ...prev, specificStores: newStores };
+                });
+            }, [csvStoreId, csvSummary]);
+
+            // ---- 设置逻辑 ----
+            const openSettings = () => { setTempSettings(settings); setShowSettings(true); };
+            const saveSettings = () => { setSettings(tempSettings); setShowSettings(false); };
+            const updateTempSpecificStore = (idx, f, v) => {
+                const ns = [...tempSettings.specificStores]; ns[idx][f] = v;
+                setTempSettings({...tempSettings, specificStores: ns});
+            };
+            const addTempSpecificStore = (newStoreName = '') => {
+                if (newStoreName && !tempSettings.specificStores.some(s => s.name === newStoreName)) {
+                     setTempSettings(prev => ({
+                        ...prev, 
+                        specificStores: [...prev.specificStores, { id: Date.now().toString(), name: newStoreName, cost: prev.defaultCost, gross: prev.defaultGross, return: prev.defaultReturn }]
+                     }));
+                     setSettings(prev => ({
+                        ...prev, 
+                        specificStores: [...prev.specificStores, { id: Date.now().toString(), name: newStoreName, cost: prev.defaultCost, gross: prev.defaultGross, return: prev.defaultReturn }]
+                     }));
+                } else if (!newStoreName) {
+                    setTempSettings({...tempSettings, specificStores: [...tempSettings.specificStores, { id: Date.now().toString(), name: '', cost: tempSettings.defaultCost, gross: tempSettings.defaultGross, return: tempSettings.defaultReturn }]});
+                }
+            };
+            const removeTempSpecificStore = (idx) => setTempSettings({...tempSettings, specificStores: tempSettings.specificStores.filter((_, i) => i !== idx)});
+
+            // ---- 多店录入面板交互 ----
+            const handleRowChange = (idx, f, v) => { const nr = [...inputRows]; nr[idx][f] = v; setInputRows(nr); };
+            const adjustVal = (idx, f, delta) => { const nr = [...inputRows]; const current = parseFloat(nr[idx][f]) || 0; nr[idx][f] = String(Math.max(0, current + delta)); setInputRows(nr); };
+            const setPreset = (idx, f, val) => { const nr = [...inputRows]; const currentValNum = Number(nr[idx][f]) || 0; const targetValNum = Number(val); nr[idx][f] = currentValNum === targetValNum ? '' : String(val); setInputRows(nr); };
+            const addRow = () => { const lastId = inputRows.length > 0 ? inputRows.length + 1 : 1; setInputRows([...inputRows, { id: `店铺${lastId}`, revenue: '', spend: '' }]); };
+            const removeRow = (idx) => setInputRows(inputRows.filter((_, i) => i !== idx));
+
+            // ---- SheetJS CSV 解析引擎 ----
+            const readFileAsArrayBuffer = (file) => {
+                return new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onload = (evt) => resolve(new Uint8Array(evt.target.result));
+                    reader.onerror = (err) => reject(err);
+                    reader.readAsArrayBuffer(file);
+                });
+            };
+
+            const parseSheetRows = (rows, fileDim, storeName) => {
+                if (!rows || rows.length < 2) return [];
+                let headerRowIdx = -1;
+                for (let i = 0; i < Math.min(10, rows.length); i++) {
+                    const testCols = rows[i].map(String);
+                    if (testCols.some(c => c.includes('日期')) && (testCols.some(c => c.includes('金额')) || testCols.some(c => c.includes('花费')))) {
+                        headerRowIdx = i;
+                        break;
+                    }
+                }
+                if (headerRowIdx === -1) return [];
+
+                const headers = rows[headerRowIdx].map(String).map(h => h.trim());
+                const exactIdx = (name) => headers.findIndex(h => h === name);
+                const getIdx = (nameMatch) => headers.findIndex(h => h.includes(nameMatch));
+                
+                const dateIdx = exactIdx('日期') !== -1 ? exactIdx('日期') : getIdx('日期');
+                const revIdx = exactIdx('支付金额') !== -1 ? exactIdx('支付金额') : getIdx('支付金额');
+                const netRevIdx = exactIdx('净支付金额') !== -1 ? exactIdx('净支付金额') : getIdx('净支付金额');
+
+                // 强力匹配金额退款率和成功退款率
+                let refundRateIdx = exactIdx('金额退款率');
+                if (refundRateIdx === -1) refundRateIdx = getIdx('金额退款率');
+                if (refundRateIdx === -1) refundRateIdx = exactIdx('成功退款率');
+                if (refundRateIdx === -1) refundRateIdx = getIdx('退款率');
+
+                // 强力匹配签收退款率
+                let signRefundRateIdx = exactIdx('签收退款率');
+                if (signRefundRateIdx === -1) signRefundRateIdx = exactIdx('签收退退款率');
+                if (signRefundRateIdx === -1) signRefundRateIdx = getIdx('签收退');
+                if (signRefundRateIdx === -1) signRefundRateIdx = getIdx('签收后');
+                if (signRefundRateIdx === -1) signRefundRateIdx = getIdx('售中退');
+
+                const spend1Idx = getIdx('全站推广');
+                const spend2Idx = getIdx('关键词推广');
+                const spend3Idx = getIdx('精准人群推广');
+
+                if (dateIdx === -1 || revIdx === -1 || netRevIdx === -1) return [];
+
+                const parseNum = (val) => {
+                    if (val === undefined || val === null || val === '') return 0;
+                    const cleanStr = String(val).replace(/[^0-9.-]/g, '');
+                    return parseFloat(cleanStr) || 0;
+                };
+
+                const parsedData = [];
+                for(let i = headerRowIdx + 1; i < rows.length; i++) {
+                    const cols = rows[i];
+                    // 修复：移除 cols.length 限制，因为有些表格末尾列为空时解析出的数组长度会变短
+                    if (!cols || cols.length === 0) continue;
+                    
+                    const date = String(cols[dateIdx] || '').trim();
+                    if(!date || date.includes('汇总') || date.includes('总计')) continue; 
+
+                    const rev = parseNum(cols[revIdx]);
+                    const netRev = parseNum(cols[netRevIdx]);
+                    
+                    let refundRate = 0;
+                    if (refundRateIdx > -1) {
+                        const val = cols[refundRateIdx];
+                        if (typeof val === 'string' && val.includes('%')) refundRate = parseNum(val) / 100;
+                        else refundRate = parseNum(val);
+                    }
+
+                    let signRefundRate = 0;
+                    if (signRefundRateIdx > -1) {
+                        const val = cols[signRefundRateIdx];
+                        if (typeof val === 'string' && val.includes('%')) signRefundRate = parseNum(val) / 100;
+                        else signRefundRate = parseNum(val);
+                    }
+
+                    const s1 = spend1Idx > -1 ? parseNum(cols[spend1Idx]) : 0;
+                    const s2 = spend2Idx > -1 ? parseNum(cols[spend2Idx]) : 0;
+                    const s3 = spend3Idx > -1 ? parseNum(cols[spend3Idx]) : 0;
+                    const totalSpend = s1 + s2 + s3;
+
+                    parsedData.push({ 
+                        storeName, 
+                        date, 
+                        rev, 
+                        netRev, 
+                        spend: totalSpend, 
+                        spendAll: s1,
+                        spendKeyword: s2,
+                        spendCrowd: s3,
+                        refundRate, 
+                        signRefundRate, 
+                        fileDim 
+                    });
+                }
+                return parsedData;
+            };
+
+            const processFilesArray = async (filesArray) => {
+                if (!filesArray || filesArray.length === 0) return;
+                
+                let targetStoreId = csvStoreId; 
+                let validFiles = [];
+
+                for (let file of filesArray) {
+                    const path = file.webkitRelativePath || file.customPath || file.name;
+                    const isExcelOrCSV = path.endsWith('.csv') || path.endsWith('.xlsx') || path.endsWith('.xls');
+
+                    if (!isExcelOrCSV) continue;
+
+                    const pathParts = path.split('/');
+                    let storeName = "默认未知店铺";
+                    let fileDim = 'daily';
+                    
+                    if (pathParts.length >= 3) {
+                        const keywordIndex = pathParts.findIndex(p => p.includes('日数据') || p.includes('周数据') || p.includes('月数据'));
+                        if (keywordIndex >= 1) {
+                            storeName = pathParts[keywordIndex - 1]; 
+                            
+                            const dimFolder = pathParts[keywordIndex];
+                            if (dimFolder.includes('周')) fileDim = 'weekly';
+                            else if (dimFolder.includes('月')) fileDim = 'monthly';
+                            
+                            addTempSpecificStore(storeName);
+                        }
+                    } else {
+                        if (path.includes('周')) fileDim = 'weekly';
+                        else if (path.includes('月')) fileDim = 'monthly';
+                    }
+
+                    validFiles.push({ file, storeName, fileDim });
+                }
+
+                if (validFiles.length === 0) {
+                    setError("未能在选择的项目中找到有效的数据表 (.csv, .xlsx, .xls)。");
+                    return;
+                }
+
+                setCsvFileName(`已自动提取并打标 ${validFiles.length} 个报表文件`);
+                setError("");
+
+                let allParsedData = [];
+                for (let item of validFiles) {
+                    try {
+                        const data = await readFileAsArrayBuffer(item.file);
+                        const workbook = window.XLSX.read(data, { type: 'array' });
+                        const firstSheetName = workbook.SheetNames[0];
+                        const worksheet = workbook.Sheets[firstSheetName];
+                        const rows = window.XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: "", raw: false });
+
+                        const parsed = parseSheetRows(rows, item.fileDim, item.storeName);
+                        allParsedData = allParsedData.concat(parsed);
+                    } catch (err) {
+                        console.error(`解析文件 ${item.file.name} 失败:`, err);
+                    }
+                }
+
+                if (allParsedData.length === 0) {
+                    setError("解析失败：未能从提取的文件中读取到有效数据。请检查表格头部格式。");
+                } else {
+                    setRawCsvData(prevData => {
+                        const combinedData = [...prevData, ...allParsedData];
+                        const uniqueDataMap = new Map();
+                        combinedData.forEach(item => uniqueDataMap.set(`${item.storeName}_${item.fileDim}_${item.date}`, item));
+                        const uniqueData = Array.from(uniqueDataMap.values());
+                        // 强制降序排列，保证最新的日期在最前
+                        uniqueData.sort((a, b) => {
+                            const dateA = new Date(a.date.replace(/-/g, '/')).getTime();
+                            const dateB = new Date(b.date.replace(/-/g, '/')).getTime();
+                            return dateB - dateA;
+                        });
+                        return uniqueData;
+                    });
+                }
+            };
+
+            const handleFileInputChange = (e) => {
+                const files = Array.from(e.target.files);
+                processFilesArray(files);
+            };
+
+            const scanFiles = (entry) => {
+                return new Promise((resolve) => {
+                    if (entry.isFile) {
+                        entry.file(f => {
+                            Object.defineProperty(f, 'customPath', { value: entry.fullPath });
+                            resolve([f]);
+                        });
+                    } else if (entry.isDirectory) {
+                        const dirReader = entry.createReader();
+                        dirReader.readEntries(async entries => {
+                            let results = [];
+                            for (let child of entries) {
+                                const subFiles = await scanFiles(child);
+                                results = results.concat(subFiles);
+                            }
+                            resolve(results);
+                        });
+                    }
+                });
+            };
+
+            const handleDrop = async (e) => {
+                let files = [];
+                if (e.dataTransfer.items) {
+                    for (let i = 0; i < e.dataTransfer.items.length; i++) {
+                        const item = e.dataTransfer.items[i].webkitGetAsEntry();
+                        if (item) {
+                            const extracted = await scanFiles(item);
+                            files = files.concat(extracted);
+                        }
+                    }
+                } else {
+                    files = Array.from(e.dataTransfer.files);
+                }
+                processFilesArray(files);
+            };
+
+            const handleCopy = () => {
+                if (activeTab === 'daily' && results.length === 0) return;
+                
+                let t = "";
+                if (activeTab === 'daily') {
+                    t = "单日业绩分析报告\n\n";
+                    results.forEach(s => {
+                        t += `门店 ${s.name || s.id} 详细经营报表\n指标名称\t计算结果\t计算公式/过程\n`;
+                        s.tableRows.forEach(r => {
+                            if (hideProfit && r.isProfit) return;
+                            t += `${r.name}\t${r.result}\t${r.calc}\n`;
+                        });
+                        t += "\n";
+                    });
+                    if (!hideProfit) {
+                        t += `全店铺月预估总净利润汇总\t${toCurrency(totalMonthlyProfit)}\t${totalProfitText}\n`;
+                    }
+                } else if (activeTab === 'csv' && csvSummary) {
+                    t = `历史数据报表分析 (店铺: ${csvStoreId})\n\n`;
+                    t += `分析周期\t${csvSummary.dateRangeStart.replace(/\n/g, '')} 至 ${csvSummary.dateRangeEnd.replace(/\n/g, '')} (共解析${csvSummary.totalRows}${unitText}，有效营业${csvSummary.validDaysCount}天)\n`;
+                    t += `时间维度\t${timeDimension === 'daily' ? '按日' : timeDimension === 'weekly' ? '按周' : '按月'}\n`;
+                    t += `总营业额(未除退款)\t${toCurrency(csvSummary.totalRev)}\n`;
+                    t += `净营业额(已除退款)\t${toCurrency(csvSummary.totalNetRev)}\n`;
+                    t += `推广总花费\t${toCurrency(csvSummary.totalSpd)}\n`;
+                    if (!hideProfit) {
+                        t += `月固定成本\t${toCurrency(csvSummary.mCost)}\n`;
+                        t += `设定的毛利率\t${csvSummary.gRate}%\n`;
+                    }
+                    t += `去极值金额退款率\t${(csvSummary.avgRefundRate * 100).toFixed(2)}%\n`;
+                    t += `去极值签收退款率\t${(csvSummary.avgSignRefundRate * 100).toFixed(2)}%\n`;
+                    if (!hideProfit) {
+                        t += `总计预估净利润(剔8%补单)\t${toCurrency(csvSummary.totalNetProfit)}\n`;
+                    }
+                    t += `平均虚投产(ROI)\t${csvSummary.avgVROI.toFixed(2)}\n`;
+                    t += `真实净投产(ROI-剔8%)\t${csvSummary.avgNROI.toFixed(2)}\n\n`;
+                    
+                    t += `周期标识\t支付金额\t退款金额\t净支付额\t金额退款率\t签收退款率\t推广总花费\t全站花费\t关键词花费\t精准人群花费\t`;
+                    if (!hideProfit) t += `固定成本\t`;
+                    t += `虚ROI\t真实净ROI(剔8%)`;
+                    if (!hideProfit) t += `\t预估净利润`;
+                    t += `\n`;
+                    
+                    t += `日均推算\t${toCurrency(csvSummary.dailyAvgRev)}\t${toCurrency(-csvSummary.dailyAvgRefundAmount)}\t${toCurrency(csvSummary.dailyAvgNetRev)}\t${(csvSummary.avgRefundRate * 100).toFixed(1)}%\t${(csvSummary.avgSignRefundRate * 100).toFixed(1)}%\t${toCurrency(csvSummary.dailyAvgSpd)}\t-\t-\t-\t`;
+                    if (!hideProfit) t += `${toCurrency(csvSummary.mCost/30)}\t`;
+                    t += `${csvSummary.avgVROI.toFixed(2)}\t${csvSummary.avgNROI.toFixed(2)}`;
+                    if (!hideProfit) t += `\t`;
+                    t += `\n`;
+                    
+                    t += `月均推算\t${toCurrency(csvSummary.monthlyAvgRev)}\t${toCurrency(-csvSummary.monthlyAvgRefundAmount)}\t${toCurrency(csvSummary.monthlyAvgNetRev)}\t${(csvSummary.avgRefundRate * 100).toFixed(1)}%\t${(csvSummary.avgSignRefundRate * 100).toFixed(1)}%\t${toCurrency(csvSummary.monthlyAvgSpd)}\t-\t-\t-\t`;
+                    if (!hideProfit) t += `${toCurrency(csvSummary.mCost)}\t`;
+                    t += `${csvSummary.avgVROI.toFixed(2)}\t${csvSummary.avgNROI.toFixed(2)}`;
+                    if (!hideProfit) t += `\t${toCurrency(csvSummary.totalNetProfit)}`;
+                    t += `\n`;
+
+                    csvResults.forEach(r => {
+                        t += `${r.label.replace(/\n/g, '')}\t${toCurrency(r.rev)}\t${toCurrency(-r.refundAmount)}\t${toCurrency(r.netRev)}\t${(r.refundRate * 100).toFixed(2)}%\t${(r.signRefundRate * 100).toFixed(2)}%\t${toCurrency(r.spd)}(${calcPercent(r.spd, r.netRev)})\t${toCurrency(r.spdAll)}(${calcPercent(r.spdAll, r.spd)})\t${toCurrency(r.spdKey)}(${calcPercent(r.spdKey, r.spd)})\t${toCurrency(r.spdCrowd)}(${calcPercent(r.spdCrowd, r.spd)})\t`;
+                        if (!hideProfit) t += `${toCurrency(r.fixedCost)}\t`;
+                        t += `${r.vROI.toFixed(2)}\t${r.nROI.toFixed(2)}`;
+                        if (!hideProfit) t += `\t${toCurrency(r.nProfit)}`;
+                        t += `\n`;
+                    });
+                }
+                
+                const ta = document.createElement("textarea"); ta.value = t; document.body.appendChild(ta); ta.select();
+                try { document.execCommand('copy'); setCopied(true); setTimeout(() => setCopied(false), 2000); } catch (e) {}
+                document.body.removeChild(ta);
+            };
+
+            const rowValColor = (val, threshold) => val < threshold ? 'text-red-500' : 'text-green-600';
+            const getLevelColor = (l) => l === '优秀' ? 'text-green-600 font-bold' : (l === '合格' ? 'text-blue-600 font-bold' : 'text-red-600 font-bold');
+
+            // --- AI 智能增长分析引擎 ---
+            const aiAnalysisResult = useMemo(() => {
+                if (!csvSummary) return null;
+                
+                const { totalNetProfit, avgVROI, avgNROI, avgRefundRate, totalFixedCost } = csvSummary;
+                
+                let rating = "暂不建议放大";
+                let ratingColor = "text-gray-600 bg-gray-100 border-gray-300";
+                let diagnosis = [];
+                let recommendations = [];
+
+                const isRefundCritical = avgRefundRate > 0.35;
+                const isVROIHealthy = avgVROI > 6;
+                const isNROIHealthy = avgNROI > 4; 
+                const isROIHealthy = isVROIHealthy && isNROIHealthy;
+                const isProfitable = totalNetProfit > 0;
+
+                // 1. 退款率安全红线诊断
+                const refundRatePct = (avgRefundRate * 100).toFixed(1);
+                if (isRefundCritical) {
+                    diagnosis.push({ status: 'critical', text: `金额退款率高达 ${refundRatePct}%！超过35%危险红线，严重侵蚀利润。` });
+                    recommendations.push("🚨 【紧急警报】退款率过高是利润毒药！请立刻排查：商品质量、物流时效、客服是否夸大宣传。在降至安全阈值前，绝对禁止放大推广！");
+                } else {
+                    diagnosis.push({ status: 'good', text: `金额退款率控制在 ${refundRatePct}%，处于35%安全阈值以内。` });
+                }
+
+                // 2. 投产ROI 诊断 
+                if (isROIHealthy) {
+                    diagnosis.push({ status: 'good', text: `投产指标极其健康（虚ROI: ${avgVROI.toFixed(2)}，真实净ROI: ${avgNROI.toFixed(2)}），已扛住8%无效单的压力，具备强劲的边际盈利能力。` });
+                } else {
+                    if (!isVROIHealthy) diagnosis.push({ status: 'bad', text: `虚投产(ROI)仅 ${avgVROI.toFixed(2)}，低于及格线(6.0)，前端引流成本偏高。` });
+                    if (!isNROIHealthy) diagnosis.push({ status: 'bad', text: `真实净投产(ROI)仅 ${avgNROI.toFixed(2)}，低于红线(4.0)，剔除8%水分后实际有效产出不足。` });
+                }
+
+                // 3. 净利润与固定成本稀释诊断
+                if (isProfitable) {
+                    diagnosis.push({ status: 'good', text: `净利润为正 (${toCurrency(totalNetProfit)})，店铺具备健康的底层盈利能力。` });
+                } else {
+                    if (isROIHealthy) {
+                        diagnosis.push({ status: 'opportunity', text: `整体处于亏损状态 (${toCurrency(totalNetProfit)})，但投产健康，亏损系【固定成本】(${toCurrency(totalFixedCost)}) 尚未被规模摊薄导致！` });
+                    } else {
+                        diagnosis.push({ status: 'bad', text: `整体处于亏损状态 (${toCurrency(totalNetProfit)})，强行放量会持续放大亏损金额。` });
+                        if (!isRefundCritical) recommendations.push("⚠️ 立即排查亏损源头：检查商品定价、推广花费占比是否过高。在真实净ROI转正前，切勿盲目增加预算。");
+                    }
+                }
+
+                // 综合评级判定
+                if (isRefundCritical) {
+                    rating = "危险！禁止放量";
+                    ratingColor = "text-red-700 bg-red-100 border-red-400 shadow-[0_0_15px_rgba(239,68,68,0.4)]";
+                } else if (isROIHealthy && isProfitable) {
+                    rating = "强烈建议放量增长";
+                    ratingColor = "text-emerald-700 bg-emerald-100 border-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.4)]";
+                    recommendations.push("🚀 【放量指令】店铺当前各项核心模型极为健康，利润空间充足！建议立刻以每天10%-20%的幅度逐步拉高推广预算，抢占更多市场份额，实现利润绝对值的最大化！");
+                } else if (isROIHealthy && !isProfitable) {
+                    rating = "建议放量 (规模稀释成本)";
+                    ratingColor = "text-blue-700 bg-blue-100 border-blue-400 shadow-[0_0_10px_rgba(59,130,246,0.4)]";
+                    recommendations.push("💡 【战略放大】虽然当前净利润为负，但您的真实净ROI非常健康，说明每卖一单的【边际利润为正】。目前的亏损纯粹是因为单量太少，没有填平固定的隐性成本。建议大胆放量，用规模效应稀释固定成本，即可迅速扭亏为盈！");
+                } else if (isProfitable && (!isVROIHealthy || !isNROIHealthy)) {
+                    rating = "适合平稳放量";
+                    ratingColor = "text-indigo-700 bg-indigo-100 border-indigo-400";
+                    recommendations.push("📈 店铺整体盘面健康，具备盈利基础。可以小幅度增加精准人群的推广预算，同时密切观测增加预算后的ROI是否出现大幅衰减。");
+                    if (!isVROIHealthy) recommendations.push("⚠️ 优化建议：虚ROI偏低，需提升主图点击率或优化详情页转化。");
+                    if (!isNROIHealthy) recommendations.push("⚠️ 优化建议：真实净ROI偏低，抗风险能力差，需控制推广成本占比，或尝试提升客单价。");
+                } else {
+                    rating = "需优化后放量 (谨慎)";
+                    ratingColor = "text-orange-700 bg-orange-100 border-orange-400";
+                    recommendations.push("🔍 当前模型存在明显短板，放量可能会击穿盈利底线，建议先针对性优化转化短板再考虑放量。");
+                }
+
+                return { rating, ratingColor, diagnosis, recommendations };
+            }, [csvSummary]);
+
+            const getThemeClasses = (idx) => {
+                const cycle = idx % 5;
+                if (cycle === 0) { // 蓝
+                    return {
+                        card: "bg-indigo-100/60 border-indigo-200 hover:border-indigo-400",
+                        label: "text-indigo-800",
+                        border: "border-indigo-300",
+                        focus: "focus:ring-indigo-300 focus:border-indigo-500",
+                        btnBg: "bg-indigo-200/50 hover:bg-indigo-200",
+                        btnText: "text-indigo-900",
+                        presetBtn: "bg-white border-indigo-300 text-indigo-800 hover:bg-indigo-50",
+                        presetActive: "bg-indigo-700 text-white border-indigo-700 shadow-md",
+                        reportTitle: "border-indigo-700 bg-indigo-100 text-indigo-800"
+                    };
+                } else if (cycle === 1) { // 粉
+                    return {
+                        card: "bg-rose-100/60 border-rose-200 hover:border-rose-400",
+                        label: "text-rose-800",
+                        border: "border-rose-300",
+                        focus: "focus:ring-rose-300 focus:border-rose-500",
+                        btnBg: "bg-rose-200/50 hover:bg-rose-200",
+                        btnText: "text-rose-900",
+                        presetBtn: "bg-white border-rose-300 text-rose-800 hover:bg-rose-50",
+                        presetActive: "bg-rose-700 text-white border-rose-700 shadow-md",
+                        reportTitle: "border-rose-700 bg-rose-100 text-rose-800"
+                    };
+                } else if (cycle === 2) { // 绿
+                    return {
+                        card: "bg-emerald-100/60 border-emerald-200 hover:border-emerald-400",
+                        label: "text-emerald-800",
+                        border: "border-emerald-300",
+                        focus: "focus:ring-emerald-300 focus:border-emerald-500",
+                        btnBg: "bg-emerald-200/50 hover:bg-emerald-200",
+                        btnText: "text-emerald-900",
+                        presetBtn: "bg-white border-emerald-300 text-emerald-800 hover:bg-emerald-50",
+                        presetActive: "bg-emerald-700 text-white border-emerald-700 shadow-md",
+                        reportTitle: "border-emerald-700 bg-emerald-100 text-emerald-800"
+                    };
+                } else if (cycle === 3) { // 黄
+                    return {
+                        card: "bg-amber-100/60 border-amber-200 hover:border-amber-400",
+                        label: "text-amber-800",
+                        border: "border-amber-300",
+                        focus: "focus:ring-amber-300 focus:border-amber-500",
+                        btnBg: "bg-amber-200/50 hover:bg-amber-200",
+                        btnText: "text-amber-900",
+                        presetBtn: "bg-white border-amber-300 text-amber-800 hover:bg-amber-50",
+                        presetActive: "bg-amber-700 text-white border-amber-700 shadow-md",
+                        reportTitle: "border-amber-700 bg-amber-100 text-amber-900"
+                    };
+                } else { // 红
+                    return {
+                        card: "bg-red-100/60 border-red-200 hover:border-red-400",
+                        label: "text-red-800",
+                        border: "border-red-300",
+                        focus: "focus:ring-red-300 focus:border-red-500",
+                        btnBg: "bg-red-200/50 hover:bg-red-200",
+                        btnText: "text-red-900",
+                        presetBtn: "bg-white border-red-300 text-red-800 hover:bg-red-50",
+                        presetActive: "bg-red-700 text-white border-red-700 shadow-md",
+                        reportTitle: "border-red-700 bg-red-100 text-red-800"
+                    };
+                }
+            };
+
+            return (
+                <div className="min-h-screen py-6 px-4 sm:px-6 flex flex-col items-center">
+                    
+                    {/* 设置面板 */}
+                    {showSettings && (
+                        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+                            <div className="bg-white rounded shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col border border-gray-300 font-sans">
+                                <div className="flex justify-between items-center p-4 border-b border-gray-200 bg-gray-50 font-bold">
+                                    <h2 className="flex items-center gap-2 text-gray-700 font-sans"><IconSettings className="w-5 h-5" />系统参数配置</h2>
+                                    <button onClick={() => setShowSettings(false)} className="text-gray-400 hover:text-gray-600"><IconX className="w-5 h-5" /></button>
+                                </div>
+                                <div className="p-5 overflow-y-auto space-y-6 flex-1">
+                                    <div className="grid grid-cols-3 gap-4 bg-gray-50 p-4 rounded border border-gray-200">
+                                        <div><label className="block text-xs font-bold text-gray-600 mb-1">默认月成本</label><input type="number" value={tempSettings.defaultCost} onChange={e => setTempSettings({...tempSettings, defaultCost: e.target.value})} className="w-full p-2 border border-gray-300 rounded text-sm outline-none focus:border-blue-500 number-font" /></div>
+                                        <div><label className="block text-xs font-bold text-gray-600 mb-1">默认毛利(%)</label><input type="number" value={tempSettings.defaultGross} onChange={e => setTempSettings({...tempSettings, defaultGross: e.target.value})} className="w-full p-2 border border-gray-300 rounded text-sm outline-none focus:border-blue-500 number-font" /></div>
+                                        <div><label className="block text-xs font-bold text-gray-600 mb-1">默认退货(%)</label><input type="number" value={tempSettings.defaultReturn} onChange={e => setTempSettings({...tempSettings, defaultReturn: e.target.value})} className="w-full p-2 border border-gray-300 rounded text-sm outline-none focus:border-blue-500 number-font" /></div>
+                                    </div>
+                                    <div className="space-y-3">
+                                        <h3 className="font-bold text-gray-800 border-l-4 border-blue-500 pl-2 text-sm">专属店铺参数 (根据店铺名称自动匹配)</h3>
+                                        {tempSettings.specificStores.map((item, idx) => (
+                                            <div key={idx} className="flex gap-2 items-center bg-white p-2 rounded border border-gray-200 shadow-sm">
+                                                <input type="text" value={item.name || item.id} onChange={e => updateTempSpecificStore(idx, 'name', e.target.value)} className="w-[20%] p-1.5 border border-gray-300 rounded text-sm text-center font-bold bg-gray-50 number-font" placeholder="店铺名称" />
+                                                <input type="number" value={item.cost} onChange={e => updateTempSpecificStore(idx, 'cost', e.target.value)} className="w-[30%] p-1.5 border border-gray-300 rounded text-sm number-font" placeholder="月成本" />
+                                                <input type="number" value={item.gross} onChange={e => updateTempSpecificStore(idx, 'gross', e.target.value)} className="w-[20%] p-1.5 border border-gray-300 rounded text-sm text-center number-font" placeholder="毛利" />
+                                                <input type="number" value={item.return} onChange={e => updateTempSpecificStore(idx, 'return', e.target.value)} className="w-[20%] p-1.5 border border-gray-300 rounded text-sm text-center number-font" placeholder="退货" />
+                                                <button onClick={() => removeTempSpecificStore(idx)} className="w-[10%] text-gray-400 hover:text-red-500 flex justify-center"><IconTrash2 className="w-4 h-4" /></button>
+                                            </div>
+                                        ))}
+                                        <button onClick={() => addTempSpecificStore()} className="w-full py-2 text-xs text-blue-600 hover:bg-blue-50 rounded border border-dashed border-blue-300 font-bold transition-colors font-sans">+ 新增专属规则</button>
+                                    </div>
+                                </div>
+                                <div className="p-4 border-t border-gray-200 flex justify-end gap-3 bg-gray-50 rounded-b-lg">
+                                    <button onClick={() => setShowSettings(false)} className="px-6 py-2 border border-gray-300 rounded text-sm font-bold text-gray-600 bg-white">取消</button>
+                                    <button onClick={saveSettings} className="px-6 py-2 bg-blue-600 text-white rounded text-sm font-bold shadow-sm hover:bg-blue-700">保存设置</button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    <div className="w-full max-w-[1200px] space-y-6">
+                        
+                        {/* 顶部标签切换器 */}
+                        <div className="flex bg-white rounded-full p-1 shadow-sm border border-gray-200 max-w-md mx-auto mb-4 relative z-10 font-sans">
+                            <button 
+                                onClick={() => {setError(""); setActiveTab('daily');}}
+                                className={`flex-1 py-2.5 px-4 rounded-full text-sm font-bold transition-all flex justify-center items-center gap-2 ${activeTab === 'daily' ? 'bg-slate-800 text-white shadow-md' : 'text-gray-500 hover:bg-gray-100'}`}
+                            >
+                                <IconCalculator className="w-4 h-4" /> 单日多店录入
+                            </button>
+                            <button 
+                                onClick={() => {setError(""); setActiveTab('csv');}}
+                                className={`flex-1 py-2.5 px-4 rounded-full text-sm font-bold transition-all flex justify-center items-center gap-2 ${activeTab === 'csv' ? 'bg-slate-800 text-white shadow-md' : 'text-gray-500 hover:bg-gray-100'}`}
+                            >
+                                <IconBarChart className="w-4 h-4" /> 历史数据表智能解析
+                            </button>
+                        </div>
+
+                        {error && <div className="text-red-600 text-sm py-3 bg-red-50 px-4 rounded-lg border border-red-200 font-bold animate-pulse text-center font-sans shadow-sm mx-auto max-w-2xl">{error}</div>}
+
+                        {/* ---------- 模式一：单日多店录入 ---------- */}
+                        {activeTab === 'daily' && (
+                            <React.Fragment>
+                                {/* 数据录入板块 */}
+                                <div className="bg-white rounded border border-gray-300 shadow-sm overflow-hidden max-w-4xl mx-auto">
+                                    <div className="flex justify-between items-center p-4 bg-gray-50 border-b border-gray-300">
+                                        <h2 className="text-lg font-bold flex items-center gap-2 text-gray-800 font-sans"><IconCalculator className="w-5 h-5 text-gray-700" /> 店铺数据录入面板</h2>
+                                        <div className="flex items-center gap-2">
+                                            <button onClick={() => setHideProfit(!hideProfit)} className={`flex items-center gap-1.5 text-xs font-bold py-2 px-3 rounded border shadow-sm transition-all font-sans ${hideProfit ? 'bg-indigo-50 text-indigo-600 border-indigo-200 hover:bg-indigo-100' : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'}`}>
+                                                {hideProfit ? <IconEyeOff className="w-4 h-4" /> : <IconEye className="w-4 h-4" />}
+                                                {hideProfit ? '显示利润' : '隐藏利润'}
+                                            </button>
+                                            <button onClick={openSettings} className="flex items-center gap-1.5 text-xs font-bold text-gray-600 bg-white py-2 px-4 rounded border border-gray-300 hover:bg-gray-50 shadow-sm transition-all font-sans">
+                                                <IconSettings className="w-4 h-4" /> 全局参数
+                                            </button>
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="p-4 space-y-6">
+                                        {inputRows.map((row, index) => {
+                                            const theme = getThemeClasses(index);
+                                            return (
+                                                <div key={index} className={`p-5 border rounded-xl relative group transition-all duration-300 shadow-sm ${theme.card}`}>
+                                                    <button onClick={() => removeRow(index)} className="absolute top-3 right-3 text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity p-1"><IconTrash2 className="w-5 h-5" /></button>
+                                                    
+                                                    <div className="grid grid-cols-1 sm:grid-cols-12 gap-6 items-start">
+                                                        {/* 店号输入 */}
+                                                        <div className="sm:col-span-2">
+                                                            <label className={`block text-[10px] font-bold mb-1.5 uppercase tracking-widest font-sans ${theme.label}`}>名称/编号</label>
+                                                            <input type="text" value={row.id} onChange={e => handleRowChange(index, 'id', e.target.value)} className={`w-full py-2.5 px-1 border rounded-lg text-center font-bold bg-white text-sm outline-none transition-all number-font ${theme.border} ${theme.focus}`} />
+                                                        </div>
+                                                        
+                                                        {/* 营业额输入 */}
+                                                        <div className="sm:col-span-5">
+                                                            <label className={`block text-xs font-bold mb-1.5 font-sans ${theme.label}`}>今日营业额 (±500)</label>
+                                                            <div className={`flex border rounded-lg overflow-hidden shadow-sm bg-white transition-all ${theme.border} ${theme.focus}`}>
+                                                                <button onClick={() => adjustVal(index, 'revenue', -500)} className={`px-3 sm:px-4 py-2 flex-shrink-0 flex items-center justify-center border-r transition-colors ${theme.btnBg} ${theme.border} ${theme.btnText}`}><IconMinus className="w-4 h-4" /></button>
+                                                                <input type="number" value={row.revenue} onChange={e => handleRowChange(index, 'revenue', e.target.value)} className="flex-1 min-w-0 w-full p-2 text-center text-lg outline-none font-bold text-slate-800 number-font" placeholder="输入金额" />
+                                                                <button onClick={() => adjustVal(index, 'revenue', 500)} className={`px-3 sm:px-4 py-2 flex-shrink-0 flex items-center justify-center border-l transition-colors ${theme.btnBg} ${theme.border} ${theme.btnText}`}><IconPlus className="w-4 h-4" /></button>
+                                                            </div>
+                                                            <div className="flex flex-wrap gap-1.5 mt-2.5">
+                                                                {[5000, 10000, 15000, 25000].map(v => (
+                                                                    <button 
+                                                                        key={v} 
+                                                                        onClick={() => setPreset(index, 'revenue', v)} 
+                                                                        className={`flex-1 text-[10px] py-2 border transition-all rounded-md font-bold preset-btn font-sans number-font ${Number(row.revenue) === v ? theme.presetActive : theme.presetBtn}`}
+                                                                    >
+                                                                        {v/10000}万
+                                                                    </button>
+                                                                ))}
+                                                            </div>
+                                                        </div>
+
+                                                        {/* 付费输入 */}
+                                                        <div className="sm:col-span-5">
+                                                            <label className={`block text-xs font-bold mb-1.5 font-sans ${theme.label}`}>今日付费 (±250)</label>
+                                                            <div className={`flex border rounded-lg overflow-hidden shadow-sm bg-white transition-all ${theme.border} ${theme.focus}`}>
+                                                                <button onClick={() => adjustVal(index, 'spend', -250)} className={`px-3 sm:px-4 py-2 flex-shrink-0 flex items-center justify-center border-r transition-colors ${theme.btnBg} ${theme.border} ${theme.btnText}`}><IconMinus className="w-4 h-4" /></button>
+                                                                <input type="number" value={row.spend} onChange={e => handleRowChange(index, 'spend', e.target.value)} className="flex-1 min-w-0 w-full p-2 text-center text-lg outline-none font-bold text-slate-800 number-font" placeholder="输入金额" />
+                                                                <button onClick={() => adjustVal(index, 'spend', 250)} className={`px-3 sm:px-4 py-2 flex-shrink-0 flex items-center justify-center border-l transition-colors ${theme.btnBg} ${theme.border} ${theme.btnText}`}><IconPlus className="w-4 h-4" /></button>
+                                                            </div>
+                                                            <div className="flex flex-wrap gap-1.5 mt-2.5">
+                                                                {[250, 1500, 2000, 3000].map(v => (
+                                                                    <button 
+                                                                        key={v} 
+                                                                        onClick={() => setPreset(index, 'spend', v)} 
+                                                                        className={`flex-1 text-[10px] py-2 border transition-all rounded-md font-bold preset-btn font-sans number-font ${Number(row.spend) === v ? theme.presetActive : theme.presetBtn}`}
+                                                                    >
+                                                                        {v}
+                                                                    </button>
+                                                                ))}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                        
+                                        <div className="pt-2">
+                                            <button onClick={addRow} className="w-full border-2 border-dashed border-gray-300 text-gray-500 hover:text-blue-600 hover:border-blue-400 hover:bg-blue-50 font-bold py-3 rounded-xl transition-all text-sm flex justify-center items-center gap-2 font-sans uppercase tracking-widest">
+                                                <IconPlus className="w-5 h-5" /> 增加一个店铺模块
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* 报告展示板块 */}
+                                {results.length > 0 && (
+                                    <div className="bg-white border border-gray-300 shadow-xl p-4 sm:p-8 rounded-xl animate-in fade-in slide-in-from-bottom-4 duration-500 max-w-4xl mx-auto">
+                                        <div className="flex flex-col sm:flex-row justify-between items-center mb-10 border-b border-gray-200 pb-6 gap-6">
+                                            <h1 className="text-2xl font-bold text-gray-900 tracking-wider flex items-center gap-3 font-sans">业绩数据分析报告</h1>
+                                            <button onClick={handleCopy} className={`flex items-center gap-2 px-6 py-2.5 rounded-full transition-all shadow-md font-bold font-sans ${copied ? 'bg-green-100 text-green-700 border border-green-300' : 'bg-slate-800 text-white border border-slate-900 hover:bg-black'}`}>
+                                                {copied ? <IconCheckCircle className="w-5 h-5" /> : <IconCopy className="w-5 h-5" />}
+                                                <span>{copied ? '报告内容已复制' : '复制分析结果'}</span>
+                                            </button>
+                                        </div>
+                                        
+                                        <div className="space-y-16">
+                                            {results.map((s, idx) => {
+                                                const theme = getThemeClasses(idx);
+                                                return (
+                                                    <div key={s.id} className="space-y-5">
+                                                        <div className={`flex items-center gap-3 px-4 border-l-8 py-2 rounded-r shadow-sm font-bold ${theme.reportTitle}`}>
+                                                            <IconStore className="w-7 h-7" />
+                                                            <h3 className="text-xl font-sans tracking-wide">门店 {s.name || s.id} 经营明细表</h3>
+                                                        </div>
+                                                        <div className="border border-gray-300 rounded-lg overflow-hidden shadow-sm bg-white">
+                                                            <table className="w-full text-sm sm:text-base text-left border-collapse table-fixed">
+                                                                <thead className="bg-gray-100 border-b border-gray-300 text-gray-800 font-sans">
+                                                                    <tr>
+                                                                        <th className="px-3 sm:px-5 py-4 font-bold w-[30%] border-r border-gray-300">指标名称</th>
+                                                                        <th className="px-3 sm:px-5 py-4 font-bold w-[25%] border-r border-gray-300 text-right sm:text-left text-slate-900">核心结果</th>
+                                                                        <th className="px-3 sm:px-5 py-4 font-bold w-[45%]">计算公式/过程</th>
+                                                                    </tr>
+                                                                </thead>
+                                                                <tbody className="divide-y divide-gray-200">
+                                                                    {s.tableRows.filter(r => !(hideProfit && r.isProfit)).map((r, rowIdx) => (
+                                                                        <tr key={rowIdx} className="hover:bg-gray-50/80 transition-colors">
+                                                                            <td className={`px-3 sm:px-5 py-3.5 font-medium border-r border-gray-200 font-sans ${r.isVROI || r.isNROI ? 'text-yellow-600 font-bold text-base' : 'text-gray-800'}`}>{r.name}</td>
+                                                                            <td className="px-3 sm:px-5 py-3.5 text-gray-900 border-r border-gray-200 text-right sm:text-left font-bold font-sans number-font break-all">
+                                                                                <span className={`${r.isProfit && r.val > 0 ? 'text-green-700 font-bold underline decoration-green-200 underline-offset-4' : ''} ${r.isProfit && r.val < 0 ? 'text-red-600 font-bold bg-red-50 px-1 rounded' : ''} ${r.isLevel ? getLevelColor(r.val) : ''} ${r.isVROI ? (rowValColor(r.val, 6)) : ''} ${r.isNROI ? (rowValColor(r.val, 4.5)) : ''} ${r.isScore && r.val < 60 ? 'text-red-600 font-bold' : ''}`}>
+                                                                                    {r.result}
+                                                                                </span>
+                                                                            </td>
+                                                                            <td className="px-3 sm:px-5 py-3.5 text-gray-500 text-[10px] sm:text-xs tracking-tight italic font-mono break-all whitespace-normal leading-relaxed number-font">
+                                                                                {r.calc}
+                                                                            </td>
+                                                                        </tr>
+                                                                    ))}
+                                                                </tbody>
+                                                            </table>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+
+                                        {/* 全局统计面板 */}
+                                        {!hideProfit && (
+                                            <div className="mt-16 bg-slate-900 text-white border-2 border-slate-800 rounded-2xl p-6 sm:p-10 shadow-2xl relative overflow-hidden group">
+                                                <div className="absolute top-0 right-0 w-80 h-80 bg-blue-500/10 blur-[100px] -mr-40 -mt-40 group-hover:bg-blue-500/20 transition-all duration-1000"></div>
+                                                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6 sm:gap-10 relative z-10 font-sans w-full">
+                                                    <div className="space-y-3 w-full sm:w-auto min-w-0">
+                                                        <div className="inline-block bg-blue-500/20 text-blue-400 text-[10px] px-2.5 py-1 rounded font-black uppercase tracking-[0.2em] border border-blue-500/30">Business Analysis Executive</div>
+                                                        <h2 className="text-2xl sm:text-3xl font-bold text-white tracking-tight break-words">全店铺月预估总净利润汇算</h2>
+                                                    </div>
+                                                    <div className="text-left sm:text-right w-full sm:w-auto min-w-0">
+                                                        <div className={`text-4xl sm:text-5xl lg:text-7xl font-black tracking-tighter font-sans break-all number-font ${totalMonthlyProfit >= 0 ? 'text-green-400 drop-shadow-[0_0_20px_rgba(74,222,128,0.4)]' : 'text-red-400 drop-shadow-[0_0_20px_rgba(248,113,113,0.4)]'}`}>
+                                                            {totalMonthlyProfit < 0 && <span className="text-xl sm:text-3xl font-normal opacity-40 font-sans mr-2">-</span>}
+                                                            <span className="text-xl sm:text-3xl mr-1 sm:mr-2 font-normal opacity-40 font-sans">¥</span>
+                                                            {formatMoney(Math.abs(totalMonthlyProfit))}
+                                                        </div>
+                                                        <div className="mt-4 sm:mt-6 inline-flex items-center gap-3 text-[10px] sm:text-xs text-slate-400 font-mono bg-white/5 py-2.5 px-4 sm:px-5 rounded-xl border border-white/10 max-w-full overflow-hidden shadow-inner number-font">
+                                                            <IconCheckCircle className="w-4 h-4 flex-shrink-0 text-blue-400" />
+                                                            <span className="truncate tracking-widest opacity-80 uppercase">{totalProfitText}</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                            </React.Fragment>
+                        )}
+
+                        {/* ---------- 模式二：历史CSV数据导入 ---------- */}
+                        {activeTab === 'csv' && (
+                            <React.Fragment>
+                                <div className="bg-white rounded border border-gray-300 shadow-sm overflow-hidden font-sans">
+                                    <div className="flex justify-between items-center p-3 bg-gray-50 border-b border-gray-300">
+                                        <h2 className="text-base font-bold flex items-center gap-2 text-gray-800"><IconBarChart className="w-4 h-4 text-gray-700" /> 数据解析中心</h2>
+                                        <div className="flex items-center gap-2">
+                                            <button onClick={() => setHideProfit(!hideProfit)} className={`flex items-center gap-1 text-[11px] font-bold py-1.5 px-2.5 rounded border shadow-sm transition-all ${hideProfit ? 'bg-indigo-50 text-indigo-600 border-indigo-200 hover:bg-indigo-100' : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'}`}>
+                                                {hideProfit ? <IconEyeOff className="w-3.5 h-3.5" /> : <IconEye className="w-3.5 h-3.5" />}
+                                                {hideProfit ? '显示利润' : '隐藏利润'}
+                                            </button>
+                                            <button onClick={openSettings} className="flex items-center gap-1 text-[11px] font-bold text-gray-600 bg-white py-1.5 px-3 rounded border border-gray-300 hover:bg-gray-50 shadow-sm transition-all">
+                                                <IconSettings className="w-3.5 h-3.5" /> 参数配置
+                                            </button>
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="p-4 flex flex-col lg:flex-row gap-6 items-start lg:items-center">
+                                        {/* 左侧：文件上传区 */}
+                                        <div className="w-full lg:w-1/2 flex-shrink-0">
+                                            <div 
+                                                className="relative border-2 border-dashed border-gray-300 rounded-lg p-4 text-center hover:bg-blue-50 hover:border-blue-400 transition-all group bg-gray-50 flex flex-col justify-center items-center min-h-[120px]"
+                                                onDrop={handleDrop}
+                                                onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                                            >
+                                                <div className="flex items-center justify-center gap-3 mb-2">
+                                                    <IconFolder className="w-6 h-6 text-blue-500" />
+                                                    <IconFile className="w-5 h-5 text-gray-400" />
+                                                </div>
+                                                <p className="text-gray-800 font-bold text-sm number-font mb-1 truncate w-full px-2" title={csvFileName || "将文件夹或表格直接拖拽至此框内"}>
+                                                    {csvFileName ? csvFileName : "将文件夹或表格拖拽至此"}
+                                                </p>
+                                                <p className="text-[10px] text-gray-500 mb-2">
+                                                    智能路径识别: 经营数据 / {'{店铺名}'} / 日数据 / 报表.xlsx
+                                                </p>
+                                                <div className="flex flex-wrap justify-center gap-2 mt-1 relative z-20">
+                                                    <label className="cursor-pointer bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded shadow-sm text-xs font-bold transition-colors">
+                                                        文件夹上传
+                                                        <input type="file" webkitdirectory="" directory="" multiple onChange={handleFileInputChange} className="hidden" />
+                                                    </label>
+                                                    <label className="cursor-pointer bg-slate-700 hover:bg-slate-800 text-white px-3 py-1.5 rounded shadow-sm text-xs font-bold transition-colors">
+                                                        单文件上传
+                                                        <input type="file" accept=".csv, .xlsx, .xls" multiple onChange={handleFileInputChange} className="hidden" />
+                                                    </label>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* 右侧：过滤与切换面板 */}
+                                        <div className="w-full lg:w-1/2 flex flex-col gap-4">
+                                            <div>
+                                                <label className="block text-xs font-bold text-gray-500 mb-1.5 uppercase tracking-widest">Target Store</label>
+                                                <select 
+                                                    value={csvStoreId}
+                                                    onChange={(e) => setCsvStoreId(e.target.value)}
+                                                    className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none font-bold text-gray-800 bg-white shadow-sm text-sm number-font"
+                                                >
+                                                    {availableStores.length === 0 ? (
+                                                        <option value="">请先上传报表文件</option>
+                                                    ) : (
+                                                        availableStores.map(storeName => {
+                                                            const s = settings.specificStores.find(set => set.name === storeName || String(set.id) === storeName) || {};
+                                                            const cost = s.cost || settings.defaultCost;
+                                                            const gross = s.gross || settings.defaultGross;
+                                                            const ret = s.return || settings.defaultReturn;
+                                                            return (
+                                                                <option key={storeName} value={storeName}>
+                                                                    {storeName} (预设成本:¥{cost} | 毛利:{gross}% | 退货:{ret}%)
+                                                                </option>
+                                                            );
+                                                        })
+                                                    )}
+                                                </select>
+                                            </div>
+                                            <div>
+                                                <label className="block text-xs font-bold text-gray-500 mb-1.5 uppercase tracking-widest flex items-center gap-1">
+                                                     Time Dimension
+                                                </label>
+                                                <div className="flex bg-gray-100 p-1 rounded-lg border border-gray-200">
+                                                    <button 
+                                                        onClick={() => setTimeDimension('daily')}
+                                                        className={`flex-1 text-xs py-1.5 rounded-md font-bold transition-all ${timeDimension === 'daily' ? 'bg-white text-blue-700 shadow-sm border border-gray-200' : 'text-gray-500 hover:bg-gray-200'}`}
+                                                    >按日</button>
+                                                    <button 
+                                                        onClick={() => setTimeDimension('weekly')}
+                                                        className={`flex-1 text-xs py-1.5 rounded-md font-bold transition-all ${timeDimension === 'weekly' ? 'bg-white text-blue-700 shadow-sm border border-gray-200' : 'text-gray-500 hover:bg-gray-200'}`}
+                                                    >按周</button>
+                                                    <button 
+                                                        onClick={() => setTimeDimension('monthly')}
+                                                        className={`flex-1 text-xs py-1.5 rounded-md font-bold transition-all ${timeDimension === 'monthly' ? 'bg-white text-blue-700 shadow-sm border border-gray-200' : 'text-gray-500 hover:bg-gray-200'}`}
+                                                    >按月</button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {csvSummary && csvResults.length > 0 ? (
+                                    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 w-full">
+                                        
+                                        {/* CSV 汇总大屏 - 紧凑版 */}
+                                        <div className="bg-slate-900 text-white rounded-xl p-4 sm:p-5 shadow-lg relative font-sans border border-slate-800 w-full">
+                                            <div className="absolute top-0 right-0 w-80 h-80 bg-blue-500/10 blur-[100px] -mr-40 -mt-40 pointer-events-none"></div>
+                                            
+                                            <div className="flex justify-between items-center mb-4 pb-3 border-b border-white/10 relative z-10">
+                                                <div>
+                                                    <h2 className="text-lg font-bold tracking-wider">历史周期数据汇总 (店: {csvStoreId})</h2>
+                                                    <p className="text-xs text-gray-400 mt-0.5 number-font">
+                                                        数据区间：{csvSummary.dateRangeStart.replace(/\n/g, '')} 至 {csvSummary.dateRangeEnd.replace(/\n/g, '')} 
+                                                        （共解析 {csvSummary.totalRows} {unitText}，有效营业 {csvSummary.validDaysCount} 天）
+                                                    </p>
+                                                </div>
+                                                <button onClick={handleCopy} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md transition-all shadow-sm font-bold text-xs ${copied ? 'bg-green-500 text-white' : 'bg-white text-slate-900 hover:bg-gray-200'}`}>
+                                                    {copied ? <IconCheckCircle className="w-3.5 h-3.5" /> : <IconCopy className="w-3.5 h-3.5" />}
+                                                    <span>{copied ? '内容已复制' : '一键复制报表'}</span>
+                                                </button>
+                                            </div>
+
+                                            {/* 动态 Grid 布局 */}
+                                            <div className={`grid grid-cols-2 md:grid-cols-4 ${hideProfit ? 'lg:grid-cols-6' : 'lg:grid-cols-8'} gap-2 sm:gap-3 relative z-10 w-full transition-all`}>
+                                                <div className="bg-white/5 p-2 sm:p-3 rounded-lg border border-white/10 flex flex-col justify-center min-w-0">
+                                                    <p className="text-gray-400 text-[9px] sm:text-[10px] font-bold uppercase tracking-widest mb-0.5 truncate">支付金额</p>
+                                                    <p className={`font-bold font-sans number-font whitespace-nowrap text-green-400 ${getDynamicTextClass(toCurrency(csvSummary.totalRev))}`}>{toCurrency(csvSummary.totalRev)}</p>
+                                                </div>
+                                                <div className="bg-white/5 p-2 sm:p-3 rounded-lg border border-white/10 flex flex-col justify-center min-w-0">
+                                                    <p className="text-gray-400 text-[9px] sm:text-[10px] font-bold uppercase tracking-widest mb-0.5 truncate">净支付金额</p>
+                                                    <p className={`font-bold font-sans number-font text-green-400 whitespace-nowrap ${getDynamicTextClass(toCurrency(csvSummary.totalNetRev))}`}>{toCurrency(csvSummary.totalNetRev)}</p>
+                                                </div>
+                                                <div className="bg-white/5 p-2 sm:p-3 rounded-lg border border-white/10 flex flex-col justify-center min-w-0">
+                                                    <p className="text-gray-400 text-[9px] sm:text-[10px] font-bold uppercase tracking-widest mb-0.5 truncate">推广总花费</p>
+                                                    <p className={`font-bold font-sans text-orange-400 number-font whitespace-nowrap ${getDynamicTextClass(toCurrency(csvSummary.totalSpd))}`}>{toCurrency(csvSummary.totalSpd)}</p>
+                                                </div>
+                                                
+                                                {/* 可自定义修改的：月固定成本 (受控) */}
+                                                {!hideProfit && (
+                                                    <div className="bg-white/5 p-2 sm:p-3 rounded-lg border border-white/10 flex flex-col justify-center min-w-0">
+                                                        <p className="text-gray-400 text-[9px] sm:text-[10px] font-bold uppercase tracking-widest mb-0.5 flex items-center truncate">
+                                                            月固定成本 <span className="ml-1 opacity-60 text-[8px] bg-white/10 px-1 rounded border border-white/20 whitespace-nowrap hidden sm:inline-block">✎改</span>
+                                                        </p>
+                                                        <EditableNumber 
+                                                            val={Math.round(csvSummary.mCost)} 
+                                                            onChangeAction={(val) => handleInlineSettingChange('mCost', val)}
+                                                            prefix="¥"
+                                                            colorClass="text-pink-400"
+                                                            borderClass="border-pink-500/50"
+                                                        />
+                                                    </div>
+                                                )}
+
+                                                {/* 可自定义修改的：毛利率 (受控) */}
+                                                {!hideProfit && (
+                                                    <div className="bg-white/5 p-2 sm:p-3 rounded-lg border border-white/10 flex flex-col justify-center min-w-0">
+                                                        <p className="text-gray-400 text-[9px] sm:text-[10px] font-bold uppercase tracking-widest mb-0.5 flex items-center truncate">
+                                                            设定的毛利 <span className="ml-1 opacity-60 text-[8px] bg-white/10 px-1 rounded border border-white/20 whitespace-nowrap hidden sm:inline-block">✎改</span>
+                                                        </p>
+                                                        <EditableNumber 
+                                                            val={csvSummary.gRate} 
+                                                            onChangeAction={(val) => handleInlineSettingChange('gross', val)}
+                                                            suffix="%"
+                                                            colorClass="text-emerald-400"
+                                                            borderClass="border-emerald-500/50"
+                                                        />
+                                                    </div>
+                                                )}
+
+                                                <div className="bg-white/5 p-2 sm:p-3 rounded-lg border border-white/10 flex flex-col justify-center min-w-0">
+                                                    <p className="text-gray-400 text-[9px] sm:text-[10px] font-bold uppercase tracking-widest mb-0.5 truncate">去极值退款率</p>
+                                                    <p className={`font-bold font-sans number-font whitespace-nowrap text-purple-300 ${getDynamicTextClass((csvSummary.avgRefundRate * 100).toFixed(2)+'%')}`}>
+                                                        {(csvSummary.avgRefundRate * 100).toFixed(2)}%
+                                                    </p>
+                                                </div>
+                                                <div className="bg-white/5 p-2 sm:p-3 rounded-lg border border-white/10 flex flex-col justify-center min-w-0">
+                                                    <p className="text-gray-400 text-[9px] sm:text-[10px] font-bold uppercase tracking-widest mb-0.5 truncate">平均虚ROI</p>
+                                                    <p className={`font-bold font-sans number-font whitespace-nowrap ${rowValColor(csvSummary.avgVROI, 6).includes('red') ? 'text-red-400' : 'text-green-400'} ${getDynamicTextClass(csvSummary.avgVROI.toFixed(2))}`}>
+                                                        {csvSummary.avgVROI.toFixed(2)}
+                                                    </p>
+                                                </div>
+                                                <div className="bg-white/5 p-2 sm:p-3 rounded-lg border border-white/10 flex flex-col justify-center min-w-0">
+                                                    <p className="text-gray-400 text-[9px] sm:text-[10px] font-bold uppercase tracking-widest mb-0.5 truncate">真实净ROI(剔8%)</p>
+                                                    <p className={`font-bold font-sans number-font whitespace-nowrap ${rowValColor(csvSummary.avgNROI, 4.5).includes('red') ? 'text-red-400' : 'text-green-400'} ${getDynamicTextClass(csvSummary.avgNROI.toFixed(2))}`}>
+                                                        {csvSummary.avgNROI.toFixed(2)}
+                                                    </p>
+                                                </div>
+
+                                                {/* 隐藏利润时，整个底部利润栏也一起隐藏 */}
+                                                {!hideProfit && (
+                                                    <div className={`col-span-2 md:col-span-4 ${hideProfit ? 'lg:col-span-6' : 'lg:col-span-8'} bg-blue-600/20 p-3 sm:p-4 rounded-lg border border-blue-500/30 flex flex-col sm:flex-row justify-between items-start sm:items-center mt-1 gap-3 min-w-0 transition-all`}>
+                                                        <div className="min-w-0 w-full sm:w-auto">
+                                                            <p className="text-blue-300 text-xs font-bold uppercase tracking-widest mb-0.5 truncate">周期内累计总计净利润</p>
+                                                            <p className="text-[10px] text-blue-200/50 number-font truncate">
+                                                                净支付额 × 92%(剔除水分) × {csvSummary.gRate}%毛利 - 推广费 - 设定固定成本(合计:{toCurrency(csvSummary.totalFixedCost)})
+                                                            </p>
+                                                        </div>
+                                                        <p className={`text-2xl sm:text-3xl lg:text-4xl font-black font-sans tracking-tighter number-font whitespace-nowrap w-full sm:w-auto text-left sm:text-right ${csvSummary.totalNetProfit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                                            {csvSummary.totalNetProfit < 0 && <span className="mr-1.5">-</span>}
+                                                            <span className="text-lg opacity-50 mx-0.5 font-normal">¥</span>
+                                                            {formatMoney(Math.abs(csvSummary.totalNetProfit))}
+                                                        </p>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        {/* AI 智能决策分析模块 (受控隐藏) */}
+                                        {!hideProfit && aiAnalysisResult && (
+                                            <div className="bg-white border border-purple-200 rounded-xl shadow-lg overflow-hidden font-sans w-full flex flex-col animate-in slide-in-from-bottom-4 duration-700">
+                                                <div className="p-4 bg-gradient-to-r from-purple-50 to-indigo-50 border-b border-purple-200 flex justify-between items-center z-10">
+                                                    <h3 className="font-bold text-purple-900 flex items-center gap-2">
+                                                        <IconSparkles className="w-5 h-5 text-purple-600"/> 
+                                                        智能增长决策分析 (AI Diagnosis)
+                                                    </h3>
+                                                    <span className={`px-4 py-1.5 rounded-md text-xs font-black uppercase tracking-widest border ${aiAnalysisResult.ratingColor}`}>
+                                                        综合评级: {aiAnalysisResult.rating}
+                                                    </span>
+                                                </div>
+                                                <div className="p-5 flex flex-col lg:flex-row gap-6">
+                                                    {/* 左侧：核心指标诊断 */}
+                                                    <div className="w-full lg:w-1/2 space-y-3">
+                                                        <h4 className="text-sm font-bold text-gray-700 border-l-4 border-purple-500 pl-2 mb-3">核心指标诊断</h4>
+                                                        <ul className="space-y-2">
+                                                           {aiAnalysisResult.diagnosis.map((item, i) => (
+                                                               <li key={i} className={`text-sm p-3 rounded-lg border ${
+                                                                    item.status === 'critical' ? 'bg-red-50 border-red-200 text-red-800 font-bold' : 
+                                                                    (item.status === 'bad' ? 'bg-orange-50 border-orange-200 text-orange-800' : 
+                                                                    (item.status === 'opportunity' ? 'bg-blue-50 border-blue-200 text-blue-800 font-bold' : 
+                                                                    'bg-green-50 border-green-200 text-green-800'))
+                                                                }`}>
+                                                                   {item.status === 'critical' ? '🚨' : (item.status === 'bad' ? '⚠️' : (item.status === 'opportunity' ? '💡' : '✅'))} {item.text}
+                                                               </li>
+                                                           ))}
+                                                        </ul>
+                                                    </div>
+                                                    {/* 右侧：行动建议 */}
+                                                    <div className="w-full lg:w-1/2 space-y-3">
+                                                        <h4 className="text-sm font-bold text-gray-700 border-l-4 border-indigo-500 pl-2 mb-3">执行行动建议</h4>
+                                                        <div className="bg-slate-50 p-4 rounded-lg border border-slate-200 h-full">
+                                                            <ul className="space-y-3">
+                                                                {aiAnalysisResult.recommendations.map((rec, i) => (
+                                                                   <li key={i} className="flex items-start gap-2 text-sm text-slate-700 leading-relaxed">
+                                                                       <span className="text-indigo-500 mt-0.5">✦</span>
+                                                                       <span className={rec.includes('🚨') || rec.includes('危险') ? 'text-red-600 font-bold' : (rec.includes('🚀') || rec.includes('💡') ? 'text-emerald-700 font-bold' : '')}>{rec}</span>
+                                                                   </li>
+                                                                ))}
+                                                            </ul>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* 每日明细表 - 表头固定，周期标识自动换行 */}
+                                        <div className="bg-white border border-gray-300 rounded-xl shadow-lg overflow-hidden font-sans w-full flex flex-col">
+                                            <div className="p-4 bg-gray-50 border-b border-gray-300 flex justify-between items-center z-10">
+                                                <h3 className="font-bold text-gray-800">经营账单明细 ({timeDimension === 'daily' ? '按日' : timeDimension === 'weekly' ? '按周' : '按月'})</h3>
+                                            </div>
+                                            {/* 加入 overscroll-y-contain 防止滚动穿透 */}
+                                            <div className="w-full max-h-[600px] overflow-y-auto overscroll-y-contain relative">
+                                                <table className="w-full text-sm text-left border-collapse table-fixed bg-white">
+                                                    <thead className="font-sans sticky top-0 z-20 shadow-[0_1px_0_#d1d5db]">
+                                                        <tr>
+                                                            <th className={`bg-gray-100 px-1 sm:px-2 py-4 font-bold border-r border-gray-200 ${hideProfit ? 'w-[12%]' : 'w-[10%]'} text-center align-bottom whitespace-normal break-words text-gray-800 transition-all`}>
+                                                                <div>周期标识</div>
+                                                                <div className="text-[10px] lg:text-[11px] text-gray-500 font-normal mt-1 space-y-0.5">
+                                                                    <div>日均推算</div>
+                                                                    <div>月均推算</div>
+                                                                </div>
+                                                            </th>
+                                                            <th className={`bg-gray-100 px-2 sm:px-3 py-4 font-bold border-r border-gray-200 ${hideProfit ? 'w-[10%]' : 'w-[8%]'} text-right align-bottom text-green-700 transition-all`}>
+                                                                <div>支付金额</div>
+                                                                <div className="text-[10px] lg:text-[11px] font-normal mt-1 number-font space-y-0.5">
+                                                                    <div className="text-green-600 font-bold">日均 {toCurrency(csvSummary.dailyAvgRev)}</div>
+                                                                    <div className="text-green-600 font-bold">月均 {toCurrency(csvSummary.monthlyAvgRev)}</div>
+                                                                </div>
+                                                            </th>
+                                                            <th className={`bg-gray-100 px-2 sm:px-3 py-4 font-bold border-r border-gray-200 ${hideProfit ? 'w-[10%]' : 'w-[8%]'} text-right text-red-600 align-bottom transition-all`}>
+                                                                <div>退款金额</div>
+                                                                <div className="text-[10px] lg:text-[11px] font-normal mt-1 number-font space-y-0.5">
+                                                                    <div className="text-red-500 font-bold">日均 {toCurrency(-csvSummary.dailyAvgRefundAmount)}</div>
+                                                                    <div className="text-red-500 font-bold">月均 {toCurrency(-csvSummary.monthlyAvgRefundAmount)}</div>
+                                                                </div>
+                                                            </th>
+                                                            <th className={`bg-gray-100 px-2 sm:px-3 py-4 font-bold border-r border-gray-200 ${hideProfit ? 'w-[10%]' : 'w-[8%]'} text-right text-green-700 align-bottom transition-all`}>
+                                                                <div>净支付额</div>
+                                                                <div className="text-[10px] lg:text-[11px] font-normal mt-1 number-font space-y-0.5">
+                                                                    <div className="text-green-600 font-bold">日均 {toCurrency(csvSummary.dailyAvgNetRev)}</div>
+                                                                    <div className="text-green-600 font-bold">月均 {toCurrency(csvSummary.monthlyAvgNetRev)}</div>
+                                                                </div>
+                                                            </th>
+                                                            <th className={`bg-gray-100 px-2 sm:px-3 py-4 font-bold border-r border-gray-200 ${hideProfit ? 'w-[10%]' : 'w-[8%]'} text-center text-red-600 align-bottom transition-all`}>
+                                                                <div>金额退款率</div>
+                                                                <div className="text-[10px] lg:text-[11px] text-red-500 font-bold mt-1 number-font space-y-0.5">
+                                                                    <div>日均 {(csvSummary.avgRefundRate * 100).toFixed(1)}%</div>
+                                                                    <div>月均 {(csvSummary.avgRefundRate * 100).toFixed(1)}%</div>
+                                                                </div>
+                                                            </th>
+                                                            <th className={`bg-gray-100 px-2 sm:px-3 py-4 font-bold border-r border-gray-200 ${hideProfit ? 'w-[10%]' : 'w-[8%]'} text-center text-red-600 align-bottom transition-all`}>
+                                                                <div>签收退款率</div>
+                                                                <div className="text-[10px] lg:text-[11px] text-red-500 font-bold mt-1 number-font space-y-0.5">
+                                                                    <div>日均 {(csvSummary.avgSignRefundRate * 100).toFixed(1)}%</div>
+                                                                    <div>月均 {(csvSummary.avgSignRefundRate * 100).toFixed(1)}%</div>
+                                                                </div>
+                                                            </th>
+                                                            <th className={`bg-gray-100 px-2 sm:px-3 py-4 font-bold border-r border-gray-200 ${hideProfit ? 'w-[18%]' : 'w-[14%]'} text-right text-gray-800 align-bottom transition-all`}>
+                                                                <div>推广总花费</div>
+                                                                <div className="text-[10px] lg:text-[11px] font-normal mt-1 number-font space-y-0.5">
+                                                                    <div className="text-gray-500 font-bold">日均 {toCurrency(csvSummary.dailyAvgSpd)}</div>
+                                                                    <div className="text-gray-500 font-bold">月均 {toCurrency(csvSummary.monthlyAvgSpd)}</div>
+                                                                </div>
+                                                            </th>
+                                                            
+                                                            {/* 动态隐藏：固定成本 */}
+                                                            {!hideProfit && (
+                                                                <th className="bg-gray-100 px-2 sm:px-3 py-4 font-bold border-r border-gray-200 w-[8%] text-right text-gray-800 align-bottom transition-all">
+                                                                    <div>固定成本</div>
+                                                                    <div className="text-[10px] lg:text-[11px] font-normal mt-1 number-font space-y-0.5">
+                                                                        <div className="text-gray-500 font-bold">日均 {toCurrency(csvSummary.mCost / 30)}</div>
+                                                                        <div className="text-gray-500 font-bold">月均 {toCurrency(csvSummary.mCost)}</div>
+                                                                    </div>
+                                                                </th>
+                                                            )}
+                                                            
+                                                            <th className={`bg-gray-100 px-2 sm:px-2 py-4 font-bold border-r border-gray-200 ${hideProfit ? 'w-[10%]' : 'w-[8%]'} text-center align-bottom text-gray-800 transition-all`}>
+                                                                <div>虚ROI</div>
+                                                                <div className="text-[10px] lg:text-[11px] text-gray-500 font-bold mt-1 number-font space-y-0.5">
+                                                                    <div>日均 {csvSummary.avgVROI.toFixed(2)}</div>
+                                                                    <div>月均 {csvSummary.avgVROI.toFixed(2)}</div>
+                                                                </div>
+                                                            </th>
+                                                            <th className={`bg-gray-100 px-2 sm:px-2 py-4 font-bold ${!hideProfit ? 'border-r border-gray-200' : ''} ${hideProfit ? 'w-[10%]' : 'w-[8%]'} text-center align-bottom text-gray-800 transition-all`}>
+                                                                <div className="whitespace-nowrap">净ROI(剔8%)</div>
+                                                                <div className="text-[10px] lg:text-[11px] text-gray-500 font-bold mt-1 number-font space-y-0.5">
+                                                                    <div>日均 {csvSummary.avgNROI.toFixed(2)}</div>
+                                                                    <div>月均 {csvSummary.avgNROI.toFixed(2)}</div>
+                                                                </div>
+                                                            </th>
+                                                            
+                                                            {/* 动态隐藏：预估净利润 */}
+                                                            {!hideProfit && (
+                                                                <th className="bg-gray-100 px-2 sm:px-4 py-4 font-bold w-[12%] text-right text-slate-800 align-bottom transition-all">
+                                                                    <div>预估净利润</div>
+                                                                    <div className={`mt-1 number-font space-y-0.5 flex flex-col items-end ${csvSummary.totalNetProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                                                        <div className="opacity-0 text-[10px] lg:text-[11px]">占位</div>
+                                                                        <div className="text-[13px] sm:text-[15px] font-black whitespace-nowrap">总计 {toCurrency(csvSummary.totalNetProfit)}</div>
+                                                                    </div>
+                                                                </th>
+                                                            )}
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody className="divide-y divide-gray-200 font-sans">
+                                                        {csvResults.map((r, i) => (
+                                                            <tr key={i} className="hover:bg-blue-50/80 transition-colors">
+                                                                <td className="px-1 sm:px-2 py-4 font-bold text-gray-800 border-r border-gray-200 font-sans number-font text-center text-[12px] whitespace-pre-wrap break-words">
+                                                                    {r.label}
+                                                                </td>
+                                                                <td className="px-2 sm:px-3 py-4 text-right border-r border-gray-200 number-font text-green-700 font-bold truncate text-[15px]">{toCurrency(r.rev)}</td>
+                                                                <td className="px-2 sm:px-3 py-4 text-right border-r border-gray-200 number-font font-bold text-red-500 truncate text-[15px]">{toCurrency(-r.refundAmount)}</td>
+                                                                <td className="px-2 sm:px-3 py-4 text-right border-r border-gray-200 number-font font-bold text-green-700 truncate text-[15px]">{toCurrency(r.netRev)}</td>
+                                                                <td className={`px-2 sm:px-3 py-4 text-center border-r border-gray-200 number-font font-bold truncate text-[15px] text-red-600`}>{(r.refundRate * 100).toFixed(1)}%</td>
+                                                                <td className="px-2 sm:px-3 py-4 text-center border-r border-gray-200 number-font text-red-600 font-bold truncate text-[15px]">{(r.signRefundRate * 100).toFixed(1)}%</td>
+                                                                <td className="px-2 sm:px-3 py-4 text-right border-r border-gray-200 text-gray-800 number-font whitespace-nowrap">
+                                                                    <div className="font-bold text-[15px] mb-1 text-gray-800">
+                                                                        {toCurrency(r.spd)} <span className="text-xs text-gray-500 font-normal">({calcPercent(r.spd, r.netRev)})</span>
+                                                                    </div>
+                                                                    <div className="text-[10px] lg:text-[11px] text-gray-500 font-normal space-y-0.5 text-left">
+                                                                        <div>全：{toCurrency(r.spdAll)} ({calcPercent(r.spdAll, r.spd)})</div>
+                                                                        <div>关：{toCurrency(r.spdKey)} ({calcPercent(r.spdKey, r.spd)})</div>
+                                                                        <div>人：{toCurrency(r.spdCrowd)} ({calcPercent(r.spdCrowd, r.spd)})</div>
+                                                                    </div>
+                                                                </td>
+                                                                
+                                                                {!hideProfit && (
+                                                                    <td className="px-2 sm:px-3 py-4 text-right border-r border-gray-200 text-gray-800 font-bold number-font truncate text-[15px]">{toCurrency(r.fixedCost)}</td>
+                                                                )}
+                                                                
+                                                                <td className="px-2 sm:px-2 py-4 text-center border-r border-gray-200 number-font font-bold truncate text-[15px]">
+                                                                    <span className={rowValColor(r.vROI, 6)}>{r.vROI.toFixed(2)}</span>
+                                                                </td>
+                                                                <td className={`px-2 sm:px-2 py-4 text-center ${!hideProfit ? 'border-r border-gray-200' : ''} number-font font-bold truncate text-[15px]`}>
+                                                                    <span className={rowValColor(r.nROI, 4.5)}>{r.nROI.toFixed(2)}</span>
+                                                                </td>
+                                                                
+                                                                {!hideProfit && (
+                                                                    <td className={`px-2 sm:px-4 py-4 text-right font-black number-font truncate text-[16px] ${r.nProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                                                        {r.nProfit >= 0 ? '+' : ''}{toCurrency(r.nProfit)}
+                                                                    </td>
+                                                                )}
+                                                            </tr>
+                                                        ))}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="py-24 text-center text-gray-400 bg-white border border-dashed border-gray-300 rounded-2xl shadow-inner w-full">
+                                        <IconBarChart className="w-20 h-20 mx-auto mb-6 opacity-20" />
+                                        <p className="text-lg font-bold opacity-40 font-sans uppercase tracking-widest">请上传数据表后在此查看分析报表</p>
+                                    </div>
+                                )}
+                            </React.Fragment>
+                        )}
+                    </div>
+                    
+                    <footer className="mt-20 pb-16 text-gray-400 text-[10px] font-sans tracking-[0.4em] text-center uppercase opacity-40">
+                        Commerce Analysis Engine &copy; 2026
+                    </footer>
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
