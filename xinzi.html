@@ -1,0 +1,1774 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>薪资自动结算系统</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <!-- 引入 html2canvas 用于生成图片 -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+    body { font-family: 'Inter', 'Microsoft YaHei', sans-serif; background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%); }
+    
+    .input-field { min-height: 48px; font-size: 16px; border-radius: 12px; transition: all 0.2s; }
+    .input-green { background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%); border: 2px solid #6ee7b7; }
+    .input-green:focus { background: #fff; border-color: #10b981; box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.2); outline: none; }
+    .input-blue { background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%); border: 2px solid #93c5fd; }
+    .input-blue:focus { background: #fff; border-color: #3b82f6; box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.2); outline: none; }
+    .input-orange { background: linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%); border: 2px solid #fdba74; }
+    .input-orange:focus { background: #fff; border-color: #f97316; box-shadow: 0 0 0 4px rgba(249, 115, 22, 0.2); outline: none; }
+    
+    .field-label { background: linear-gradient(135deg, #fef3c7 0%, #fcd34d 100%); font-weight: 600; font-size: 13px; letter-spacing: 0.5px; }
+    .field-label-store { background: linear-gradient(135deg, #fce7f3 0%, #f9a8d4 100%); }
+    .field-label-custom { background: linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%); }
+    
+    .employee-card { border-radius: 20px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); overflow: hidden; margin-bottom: 24px; display: flex; flex-direction: column; transition: all 0.3s; }
+    .employee-card:hover { box-shadow: 0 12px 20px -3px rgba(0, 0, 0, 0.1); transform: translateY(-2px); }
+    
+    .header-yellow { background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%); }
+    .header-purple { background: linear-gradient(135deg, #a855f7 0%, #7c3aed 100%); }
+    .header-orange { background: linear-gradient(135deg, #f97316 0%, #ea580c 100%); }
+    .header-blue { background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); }
+    .header-teal { background: linear-gradient(135deg, #14b8a6 0%, #0d9488 100%); }
+    .header-pink { background: linear-gradient(135deg, #ec4899 0%, #db2777 100%); }
+    .header-indigo { background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%); }
+    
+    .result-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .result-table th { background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%); padding: 12px 8px; font-weight: 600; color: #475569; border-bottom: 2px solid #cbd5e1; white-space: nowrap; text-align: center; }
+    .result-table td { padding: 12px 8px; border-bottom: 1px solid #e2e8f0; vertical-align: middle; }
+    .result-table tr:hover td { background: #f8fafc; }
+    
+    .summary-table { font-family: 'SimHei', '黑体', 'Microsoft YaHei', sans-serif; }
+    .summary-table th, .summary-table td { text-align: center !important; }
+    
+    .amount { font-family: 'SF Mono', monospace; font-weight: 600; }
+    .amount-large { font-size: 15px; }
+    
+    .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 50; align-items: center; justify-content: center; backdrop-filter: blur(4px); }
+    .modal.show { display: flex; }
+    .modal-content { background: white; border-radius: 24px; max-width: 900px; width: 92%; max-height: 90vh; overflow-y: auto; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25); }
+    .modal-content-wide { max-width: 1000px; }
+    
+    .tab-active { background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); color: white; }
+    
+    .drag-area { border: 3px dashed #cbd5e1; border-radius: 16px; transition: all 0.3s; }
+    .drag-area.dragover { border-color: #3b82f6; background: #eff6ff; transform: scale(1.02); }
+    
+    /* 紧凑型按钮样式 */
+    .btn-compact { padding: 6px 12px; border-radius: 8px; font-size: 12px; font-weight: 600; color: white; border: none; cursor: pointer; display: flex; align-items: center; gap: 6px; transition: all 0.2s; box-shadow: 0 2px 4px rgba(0,0,0,0.1); white-space: nowrap; }
+    .btn-compact:hover { transform: translateY(-1px); box-shadow: 0 4px 8px rgba(0,0,0,0.15); }
+    .btn-green { background: linear-gradient(135deg, #10b981 0%, #059669 100%); }
+    .btn-teal { background: linear-gradient(135deg, #14b8a6 0%, #0d9488 100%); }
+    .btn-blue { background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); }
+    .btn-pink { background: linear-gradient(135deg, #ec4899 0%, #db2777 100%); }
+    .btn-amber { background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); }
+    .btn-purple { background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%); }
+    .btn-red { background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); }
+    .btn-cyan { background: linear-gradient(135deg, #06b6d4 0%, #0891b2 100%); }
+    
+    .editable-name { background: transparent; border: 2px solid transparent; border-radius: 8px; padding: 4px 12px; font-size: 18px; font-weight: 700; color: white; cursor: text; transition: all 0.2s; min-width: 80px; }
+    .editable-name:hover, .editable-name:focus { background: rgba(255,255,255,0.2); border-color: rgba(255,255,255,0.4); outline: none; }
+    
+    .editable-rest { background: rgba(255,255,255,0.15); border: 2px solid transparent; border-radius: 6px; padding: 2px 8px; font-size: 14px; color: white; cursor: text; transition: all 0.2s; width: 50px; text-align: center; }
+    .editable-rest:hover, .editable-rest:focus { background: rgba(255,255,255,0.25); border-color: rgba(255,255,255,0.4); outline: none; }
+    
+    .editable-meal { background: rgba(255,255,255,0.15); border: 2px solid transparent; border-radius: 6px; padding: 2px 8px; font-size: 14px; color: white; cursor: text; transition: all 0.2s; width: 50px; text-align: center; }
+    .editable-meal:hover, .editable-meal:focus { background: rgba(255,255,255,0.25); border-color: rgba(255,255,255,0.4); outline: none; }
+
+    .editable-rate { background: rgba(255,255,255,0.15); border: 2px solid transparent; border-radius: 6px; padding: 2px 6px; font-size: 12px; color: white; cursor: text; transition: all 0.2s; width: 45px; text-align: center; }
+    .editable-rate:hover, .editable-rate:focus { background: rgba(255,255,255,0.25); border-color: rgba(255,255,255,0.4); outline: none; }
+
+    .checkbox-wrapper { display: flex; align-items: center; gap: 8px; padding: 10px 14px; background: #f8fafc; border-radius: 10px; cursor: pointer; transition: all 0.2s; }
+    .checkbox-wrapper:hover { background: #f1f5f9; }
+    .checkbox-wrapper input[type="checkbox"] { width: 18px; height: 18px; accent-color: #3b82f6; }
+    
+    .custom-field-box { position: relative; }
+    .field-actions { position: absolute; top: -10px; right: -10px; display: none; gap: 4px; z-index: 10; }
+    .custom-field-box:hover .field-actions { display: flex; }
+    .field-action-btn { width: 24px; height: 24px; border-radius: 50%; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 11px; transition: all 0.2s; }
+    .field-action-btn:hover { transform: scale(1.1); }
+    .field-action-btn.edit { background: #3b82f6; color: white; box-shadow: 0 2px 4px rgba(59, 130, 246, 0.4); }
+    .field-action-btn.delete { background: #ef4444; color: white; box-shadow: 0 2px 4px rgba(239, 68, 68, 0.4); }
+    .field-action-btn.add { background: #10b981; color: white; box-shadow: 0 2px 4px rgba(16, 185, 129, 0.4); }
+
+    .rate-input-wrapper { display: flex; align-items: center; gap: 4px; }
+    .rate-input { width: 60px; padding: 2px 6px; font-size: 12px; border: 1px solid rgba(255,255,255,0.3); border-radius: 4px; background: rgba(255,255,255,0.15); color: white; text-align: center; }
+    .rate-input:focus { outline: none; background: rgba(255,255,255,0.25); border-color: rgba(255,255,255,0.5); }
+    
+    .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+    
+    .calc-process-font { font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif; font-weight: 500; color: #1e293b; letter-spacing: 0.5px; }
+    
+    /* 细表明细展示样式 */
+    .detail-grid { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; text-align: left; }
+    .detail-grid span:first-child { color: #64748b; }
+    .detail-grid span:last-child { text-align: right; font-weight: 600; color: #334155; font-family: 'SF Mono', monospace; }
+  </style>
+</head>
+<body class="min-h-screen p-4 md:p-6">
+  <div class="max-w-7xl mx-auto space-y-6">
+    <!-- 标题 -->
+    <div class="text-center py-6">
+      <h1 class="text-3xl md:text-4xl font-bold text-slate-800 flex items-center justify-center gap-4">
+        <div class="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-700 rounded-2xl flex items-center justify-center text-white shadow-lg">
+          <i class="fas fa-calculator text-xl"></i>
+        </div>
+        薪资自动结算系统
+      </h1>
+      <p class="text-slate-500 mt-3 text-lg">按实际出勤天数折算日薪，所见即所得</p>
+    </div>
+
+    <!-- 参数配置 -->
+    <div class="employee-card bg-white border border-slate-200">
+      <div class="header-blue text-white p-4 flex items-center gap-3">
+        <i class="fas fa-cog text-xl"></i>
+        <h2 class="text-lg font-bold">结算参数</h2>
+      </div>
+      <div class="p-6">
+        <div class="grid grid-cols-2 md:grid-cols-5 gap-5">
+          <div class="space-y-2">
+            <label class="text-sm font-semibold text-slate-600">结算年份</label>
+            <input type="number" id="year" class="input-field input-blue w-full px-4 rounded-xl">
+          </div>
+          <div class="space-y-2">
+            <label class="text-sm font-semibold text-slate-600">结算月份</label>
+            <input type="number" id="month" min="1" max="12" placeholder="请填入月份" class="input-field input-blue w-full px-4 rounded-xl">
+          </div>
+          <div class="space-y-2">
+            <label class="text-sm font-semibold text-slate-600">当月天数</label>
+            <input type="number" id="daysInMonth" disabled class="w-full px-4 py-3 bg-slate-100 border-2 border-slate-200 rounded-xl text-slate-600 font-semibold">
+          </div>
+          <div class="space-y-2">
+            <label class="text-sm font-semibold text-slate-600">老节天数</label>
+            <input type="number" id="holidayDays" min="0" value="0" class="input-field input-blue w-full px-4 rounded-xl">
+          </div>
+          <div class="space-y-2">
+            <label class="text-sm font-semibold text-slate-600">合规日薪计算公式</label>
+            <div class="px-3 py-3 bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-blue-200 rounded-xl text-xs text-blue-700 font-bold whitespace-nowrap overflow-hidden text-ellipsis" title="(底薪+绩效) ÷ (当月天数 - 配置月休)">
+              (底薪+绩效) ÷ 标准出勤
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 操作按钮 -->
+    <div class="flex flex-wrap gap-3">
+      <button onclick="showImportModal()" class="px-5 py-3 bg-white border-2 border-slate-200 rounded-xl text-sm font-semibold hover:border-blue-400 hover:bg-blue-50 transition-all flex items-center gap-2 shadow-sm">
+        <i class="fas fa-upload text-blue-500"></i> 导入数据
+      </button>
+      <button onclick="exportTemplate()" class="px-5 py-3 bg-white border-2 border-slate-200 rounded-xl text-sm font-semibold hover:border-green-400 hover:bg-green-50 transition-all flex items-center gap-2 shadow-sm">
+        <i class="fas fa-download text-green-500"></i> 导出模板
+      </button>
+      <button onclick="exportResults()" class="px-5 py-3 bg-white border-2 border-slate-200 rounded-xl text-sm font-semibold hover:border-orange-400 hover:bg-orange-50 transition-all flex items-center gap-2 shadow-sm">
+        <i class="fas fa-file-csv text-orange-500"></i> 导出结果
+      </button>
+      <button onclick="saveToLocal()" class="px-5 py-3 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-xl text-sm font-semibold hover:from-green-600 hover:to-green-700 transition-all flex items-center gap-2 shadow-lg shadow-green-200">
+        <i class="fas fa-save"></i> 保存到本地
+      </button>
+      <button onclick="loadFromLocal()" class="px-5 py-3 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-xl text-sm font-semibold hover:from-blue-600 hover:to-blue-700 transition-all flex items-center gap-2 shadow-lg shadow-blue-200">
+        <i class="fas fa-folder-open"></i> 读取本地
+      </button>
+      <button onclick="showAddEmployeeModal()" class="px-5 py-3 bg-gradient-to-r from-pink-500 to-pink-600 text-white rounded-xl text-sm font-semibold hover:from-pink-600 hover:to-pink-700 transition-all flex items-center gap-2 shadow-lg shadow-pink-200">
+        <i class="fas fa-user-plus"></i> 新增员工
+      </button>
+      <button onclick="clearAll()" class="px-5 py-3 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-xl text-sm font-semibold hover:from-red-600 hover:to-red-700 transition-all flex items-center gap-2 shadow-lg shadow-red-200">
+        <i class="fas fa-trash"></i> 清空
+      </button>
+    </div>
+
+    <!-- 标签页 -->
+    <div class="employee-card bg-white border border-slate-200 overflow-hidden !mb-0">
+      <div class="flex border-b bg-slate-50">
+        <button onclick="switchTab('input')" id="tab-input" class="flex-1 py-4 px-6 text-center font-semibold tab-active flex items-center justify-center gap-2 transition-all">
+          <i class="fas fa-edit"></i> 数据录入 & 实时明细
+        </button>
+        <button onclick="switchTab('result')" id="tab-result" class="flex-1 py-4 px-6 text-center font-semibold text-slate-600 hover:bg-slate-100 flex items-center justify-center gap-2 transition-all">
+          <i class="fas fa-table"></i> 月底薪资单
+        </button>
+        <button onclick="switchTab('summary')" id="tab-summary" class="flex-1 py-4 px-6 text-center font-semibold text-slate-600 hover:bg-slate-100 flex items-center justify-center gap-2 transition-all">
+          <i class="fas fa-chart-pie"></i> 发放汇总表
+        </button>
+      </div>
+
+      <!-- 数据录入页 -->
+      <div id="content-input" class="p-4 md:p-6 space-y-6 bg-slate-100">
+        <div id="employee-cards"></div>
+        <div id="custom-employee-cards"></div>
+
+        <!-- 兼职套版 -->
+        <div class="employee-card bg-white border border-slate-200" id="card-parttime-template">
+          <div class="header-purple text-white p-4 flex items-center gap-3">
+            <i class="fas fa-puzzle-piece text-xl"></i>
+            <h3 class="text-lg font-bold flex-1">兼职套版（计件工资）</h3>
+            <button onclick="saveCardAsImage('card-parttime-template', '兼职套版')" class="btn-compact btn-cyan" title="保存卡片为图片"><i class="fas fa-camera"></i>存图</button>
+          </div>
+          <div class="p-6">
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-5">
+              <div class="space-y-2">
+                <label class="field-label block px-4 py-3 rounded-t-xl text-slate-800">套版数量</label>
+                <div class="relative">
+                  <input type="number" id="parttime-template" data-field="templateCount" placeholder="0" class="input-green input-field w-full px-4 rounded-b-xl">
+                  <span class="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 text-sm">¥10/个</span>
+                </div>
+              </div>
+              <div class="space-y-2">
+                <label class="field-label block px-4 py-3 rounded-t-xl text-slate-800">单独上架</label>
+                <div class="relative">
+                  <input type="number" id="parttime-single" data-field="singleUploadCount" placeholder="0" class="input-green input-field w-full px-4 rounded-b-xl">
+                  <span class="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 text-sm">¥2/个</span>
+                </div>
+              </div>
+              <div class="space-y-2">
+                <label class="field-label block px-4 py-3 rounded-t-xl text-slate-800">完整套版</label>
+                <div class="relative">
+                  <input type="number" id="parttime-full" data-field="fullTemplateCount" placeholder="0" class="input-green input-field w-full px-4 rounded-b-xl">
+                  <span class="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 text-sm">¥12/套</span>
+                </div>
+              </div>
+              <div class="space-y-2">
+                <label class="field-label block px-4 py-3 rounded-t-xl text-slate-800">AI产图</label>
+                <div class="relative">
+                  <input type="number" id="parttime-ai" data-field="aiImageCount" placeholder="0" class="input-green input-field w-full px-4 rounded-b-xl">
+                  <span class="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 text-sm">¥15/套</span>
+                </div>
+              </div>
+            </div>
+            <div class="mt-6 p-5 bg-gradient-to-r from-purple-50 to-pink-50 rounded-xl border-2 border-purple-200 flex justify-between items-center">
+              <span class="text-purple-800 font-semibold text-lg">计件工资合计</span>
+              <span class="text-purple-700 font-bold text-2xl">¥<span id="piecework-total">0.00</span></span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 试用期员工 -->
+        <div class="employee-card bg-white border border-slate-200" id="card-probation">
+          <div class="header-orange text-white p-4 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+              <i class="fas fa-user-graduate text-xl"></i>
+              <h3 class="text-lg font-bold">试用期员工</h3>
+            </div>
+            <div class="flex items-center gap-2">
+              <button onclick="saveCardAsImage('card-probation', '试用期员工')" class="btn-compact btn-cyan" title="保存卡片为图片"><i class="fas fa-camera"></i>存图</button>
+              <button onclick="addProbationEmployee()" class="px-4 py-2 bg-white/20 rounded-lg hover:bg-white/30 font-semibold text-sm flex items-center gap-2 transition-all">
+                <i class="fas fa-plus"></i> 添加员工
+              </button>
+            </div>
+          </div>
+          <div id="probation-container" class="p-6">
+            <p class="text-slate-400 text-center py-8 text-lg">暂无试用期员工，点击右上角添加</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- 薪资明细页 -->
+      <div id="content-result" class="hidden p-4 md:p-6 bg-slate-100">
+        <div class="header-teal text-white p-5 rounded-t-2xl flex items-center gap-3">
+          <i class="fas fa-table text-xl"></i>
+          <h3 class="text-xl font-bold" id="result-title">薪资结算单</h3>
+        </div>
+        <div class="overflow-x-auto bg-white rounded-b-2xl shadow-inner">
+          <table class="result-table min-w-[1000px]">
+            <thead>
+              <tr>
+                <th class="rounded-tl-lg w-[8%]">员工</th>
+                <th class="w-[8%]">岗位</th>
+                <th class="text-center w-[8%]">底薪(设)</th>
+                <th class="text-center w-[8%]">绩效(录)</th>
+                <th class="text-center text-blue-600 w-[8%]">核算日薪</th>
+                <th class="text-center w-[8%]">出勤<br>(实/应)</th>
+                <th class="text-center text-purple-600 w-[10%]">基+绩折算<br>(含老节/加班)</th>
+                <th class="text-left w-[18%]">各项提成合计</th>
+                <th class="text-left w-[14%]">其他(餐补/全勤/贴)</th>
+                <th class="text-center text-green-600 rounded-tr-lg text-base w-[10%]">实发工资</th>
+              </tr>
+            </thead>
+            <tbody id="result-table-body"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- 薪资汇总页 -->
+      <div id="content-summary" class="hidden p-6 bg-slate-100">
+        <div class="header-teal text-white p-5 rounded-t-2xl flex items-center justify-between">
+          <div class="flex items-center gap-3">
+            <i class="fas fa-chart-pie text-xl"></i>
+            <h3 class="text-xl font-bold" id="summary-title">薪资汇总表</h3>
+          </div>
+          <button onclick="exportSummary()" class="px-5 py-2.5 bg-white/20 rounded-xl hover:bg-white/30 font-semibold flex items-center gap-2 transition-all">
+            <i class="fas fa-download"></i> 导出简表
+          </button>
+        </div>
+        <div class="overflow-x-auto bg-white rounded-b-2xl shadow-inner">
+          <table class="result-table summary-table">
+            <thead>
+              <tr>
+                <th class="rounded-tl-lg">员工姓名</th>
+                <th>岗位</th>
+                <th class="text-blue-600">应发基础(含折算)</th>
+                <th class="text-purple-600">提成及其他</th>
+                <th class="text-green-600 text-base">实发金额</th>
+                <th class="rounded-tr-lg">备注</th>
+              </tr>
+            </thead>
+            <tbody id="summary-table-body"></tbody>
+            <tfoot>
+              <tr class="bg-gradient-to-r from-teal-50 to-cyan-50 font-bold">
+                <td colspan="2" class="p-5 text-teal-800 text-lg rounded-bl-lg text-right">总计发放：</td>
+                <td class="p-5 text-teal-800 text-lg" id="total-base">¥0.00</td>
+                <td class="p-5 text-teal-800 text-lg" id="total-addition">¥0.00</td>
+                <td class="p-5 text-teal-800 text-2xl" id="total-net">¥0.00</td>
+                <td class="rounded-br-lg"></td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="text-center text-slate-400 text-sm py-6">
+      合规薪资系统 · 按实际出勤自动折算 · 所见即所得
+    </div>
+  </div>
+
+  <!-- 导入模态框 -->
+  <div id="import-modal" class="modal">
+    <div class="modal-content">
+      <div class="p-6 border-b">
+        <div class="flex justify-between items-center">
+          <h3 class="text-xl font-bold text-slate-800">导入数据</h3>
+          <button onclick="closeModal('import-modal')" class="w-10 h-10 rounded-full hover:bg-slate-100 flex items-center justify-center transition-all">
+            <i class="fas fa-times text-slate-400"></i>
+          </button>
+        </div>
+      </div>
+      <div class="p-6 space-y-5">
+        <div id="drop-area" class="drag-area p-10 text-center cursor-pointer" onclick="document.getElementById('file-input').click()">
+          <div class="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <i class="fas fa-cloud-upload-alt text-2xl text-blue-500"></i>
+          </div>
+          <p class="text-slate-700 font-semibold text-lg">点击或拖拽CSV文件到此处</p>
+          <p class="text-slate-400 text-sm mt-2">支持 .csv 格式</p>
+          <input type="file" id="file-input" accept=".csv" class="hidden" onchange="handleFileImport(event)">
+        </div>
+        <div class="relative">
+          <div class="absolute inset-0 flex items-center"><div class="w-full border-t border-slate-200"></div></div>
+          <div class="relative flex justify-center"><span class="bg-white px-4 text-slate-400 text-sm">或粘贴CSV内容</span></div>
+        </div>
+        <textarea id="import-textarea" class="w-full h-40 p-4 border-2 border-slate-200 rounded-xl text-sm font-mono focus:border-blue-500 focus:outline-none resize-none" placeholder="粘贴CSV内容..."></textarea>
+        <button onclick="processTextImport()" class="w-full py-4 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-xl font-semibold hover:from-blue-600 hover:to-blue-700 transition-all shadow-lg shadow-blue-200">
+          确认导入
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 新增员工模态框 -->
+  <div id="add-employee-modal" class="modal">
+    <div class="modal-content modal-content-wide">
+      <div class="p-6 border-b">
+        <div class="flex justify-between items-center">
+          <h3 class="text-xl font-bold text-slate-800"><i class="fas fa-user-plus text-pink-500 mr-2"></i>新增员工</h3>
+          <button onclick="closeModal('add-employee-modal')" class="w-10 h-10 rounded-full hover:bg-slate-100 flex items-center justify-center transition-all">
+            <i class="fas fa-times text-slate-400"></i>
+          </button>
+        </div>
+      </div>
+      <div class="p-6 space-y-5">
+        <div class="grid grid-cols-3 gap-4">
+          <label class="cursor-pointer">
+            <input type="radio" name="empType" value="yunying" class="hidden peer" checked>
+            <div class="p-4 border-2 border-slate-200 rounded-xl text-center peer-checked:border-pink-500 peer-checked:bg-pink-50 transition-all">
+              <i class="fas fa-chart-line text-2xl text-slate-400 peer-checked:text-pink-500 mb-2"></i>
+              <p class="font-semibold text-slate-700">运营</p>
+            </div>
+          </label>
+          <label class="cursor-pointer">
+            <input type="radio" name="empType" value="wenyuan" class="hidden peer">
+            <div class="p-4 border-2 border-slate-200 rounded-xl text-center peer-checked:border-indigo-500 peer-checked:bg-indigo-50 transition-all">
+              <i class="fas fa-file-alt text-2xl text-slate-400 peer-checked:text-indigo-500 mb-2"></i>
+              <p class="font-semibold text-slate-700">仓库文员</p>
+            </div>
+          </label>
+          <label class="cursor-pointer">
+            <input type="radio" name="empType" value="dabaoB" class="hidden peer">
+            <div class="p-4 border-2 border-slate-200 rounded-xl text-center peer-checked:border-teal-500 peer-checked:bg-teal-50 transition-all">
+              <i class="fas fa-box text-2xl text-slate-400 peer-checked:text-teal-500 mb-2"></i>
+              <p class="font-semibold text-slate-700">仓库打包</p>
+            </div>
+          </label>
+        </div>
+
+        <div class="grid grid-cols-2 gap-4">
+          <div class="space-y-2">
+            <label class="text-sm font-semibold text-slate-600">员工姓名</label>
+            <input type="text" id="new-emp-name" placeholder="请输入姓名" class="input-field w-full px-4 border-2 border-slate-200 rounded-xl focus:border-pink-500 focus:outline-none">
+          </div>
+          <div class="space-y-2">
+            <label class="text-sm font-semibold text-slate-600">岗位名称</label>
+            <input type="text" id="new-emp-position" placeholder="如：运营专员" class="input-field w-full px-4 border-2 border-slate-200 rounded-xl focus:border-pink-500 focus:outline-none">
+          </div>
+        </div>
+
+        <div class="grid grid-cols-3 gap-4">
+          <div class="space-y-2">
+            <label class="text-sm font-semibold text-slate-600">底薪</label>
+            <input type="number" id="new-emp-salary" placeholder="3500" class="input-field w-full px-4 border-2 border-slate-200 rounded-xl focus:border-pink-500 focus:outline-none">
+          </div>
+          <div class="space-y-2">
+            <label class="text-sm font-semibold text-slate-600">月休天数</label>
+            <input type="number" id="new-emp-rest" placeholder="4" class="input-field w-full px-4 border-2 border-slate-200 rounded-xl focus:border-pink-500 focus:outline-none">
+          </div>
+          <div class="space-y-2">
+            <label class="text-sm font-semibold text-slate-600">餐补费(元/出勤天)</label>
+            <input type="number" id="new-emp-meal" placeholder="12" class="input-field w-full px-4 border-2 border-slate-200 rounded-xl focus:border-pink-500 focus:outline-none">
+          </div>
+        </div>
+
+        <div class="grid grid-cols-3 gap-4">
+          <div class="space-y-2">
+            <label class="text-sm font-semibold text-slate-600">默认固定绩效</label>
+            <input type="number" id="new-emp-performance" placeholder="0" class="input-field w-full px-4 border-2 border-slate-200 rounded-xl focus:border-pink-500 focus:outline-none">
+          </div>
+          <div class="space-y-2">
+            <label class="text-sm font-semibold text-slate-600">满勤奖金</label>
+            <input type="number" id="new-emp-fullatt" placeholder="200" class="input-field w-full px-4 border-2 border-slate-200 rounded-xl focus:border-pink-500 focus:outline-none">
+          </div>
+          <div class="space-y-2">
+            <label class="text-sm font-semibold text-slate-600">额外补贴</label>
+            <input type="number" id="new-emp-subsidy" placeholder="0" class="input-field w-full px-4 border-2 border-slate-200 rounded-xl focus:border-pink-500 focus:outline-none">
+          </div>
+        </div>
+
+        <div class="space-y-3">
+          <label class="text-sm font-semibold text-slate-600">提成及输入项（可多选）</label>
+          <div class="grid grid-cols-4 gap-3">
+            <label class="checkbox-wrapper">
+              <input type="checkbox" id="field-platformSales" value="platformSales">
+              <span>平台销售</span>
+            </label>
+            <label class="checkbox-wrapper">
+              <input type="checkbox" id="field-offlineSales" value="offlineSales">
+              <span>线下销售</span>
+            </label>
+            <label class="checkbox-wrapper">
+              <input type="checkbox" id="field-orderSales" value="orderSales">
+              <span>跟单销售</span>
+            </label>
+            <label class="checkbox-wrapper">
+              <input type="checkbox" id="field-storeRevenue" value="storeRevenue">
+              <span>店铺营收</span>
+            </label>
+            <label class="checkbox-wrapper">
+              <input type="checkbox" id="field-otherCommission" value="otherCommission" checked>
+              <span>其他提成</span>
+            </label>
+            <label class="checkbox-wrapper">
+              <input type="checkbox" id="field-fixedPerformance" value="fixedPerformance">
+              <span>录入当月绩效</span>
+            </label>
+            <label class="checkbox-wrapper col-span-2">
+              <input type="checkbox" id="field-actualRestDays" value="actualRestDays" checked>
+              <span>考勤模块(出勤/休息)</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-4 mt-2">
+          <label class="checkbox-wrapper">
+            <input type="checkbox" id="new-emp-overtime" checked disabled title="新算法统一按实际出勤天数折算">
+            <span class="text-slate-500">按实际出勤折算(默认开启)</span>
+          </label>
+          <label class="checkbox-wrapper">
+            <input type="checkbox" id="new-emp-fullatt-check" checked>
+            <span>计算全勤奖</span>
+          </label>
+        </div>
+
+        <button onclick="addNewEmployee()" class="w-full py-4 mt-4 bg-gradient-to-r from-pink-500 to-pink-600 text-white rounded-xl font-semibold hover:from-pink-600 hover:to-pink-700 transition-all shadow-lg shadow-pink-200">
+          <i class="fas fa-plus mr-2"></i>确认添加
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 添加自定义提成字段模态框 -->
+  <div id="add-field-modal" class="modal">
+    <div class="modal-content">
+      <div class="p-6 border-b">
+        <div class="flex justify-between items-center">
+          <h3 class="text-xl font-bold text-slate-800"><i class="fas fa-plus-circle text-purple-500 mr-2"></i>添加提成字段</h3>
+          <button onclick="closeModal('add-field-modal')" class="w-10 h-10 rounded-full hover:bg-slate-100 flex items-center justify-center transition-all">
+            <i class="fas fa-times text-slate-400"></i>
+          </button>
+        </div>
+      </div>
+      <div class="p-6 space-y-5">
+        <input type="hidden" id="field-target-emp">
+        <input type="hidden" id="field-target-iscustom">
+        <div class="space-y-2">
+          <label class="text-sm font-semibold text-slate-600">字段名称</label>
+          <input type="text" id="new-field-name" placeholder="如：特殊提成、活动奖金" class="input-field w-full px-4 border-2 border-slate-200 rounded-xl focus:border-purple-500 focus:outline-none">
+        </div>
+        <div class="space-y-2">
+          <label class="text-sm font-semibold text-slate-600">提成比例 (%)</label>
+          <input type="number" id="new-field-rate" placeholder="1.0" step="0.1" class="input-field w-full px-4 border-2 border-slate-200 rounded-xl focus:border-purple-500 focus:outline-none">
+          <p class="text-xs text-slate-400">输入0表示固定金额（不计算百分比提成）</p>
+        </div>
+        <div class="grid grid-cols-2 gap-4">
+          <div class="space-y-2">
+            <label class="text-sm font-semibold text-slate-600">默认单价/金额</label>
+            <input type="number" id="new-field-unitprice" placeholder="0" class="input-field w-full px-4 border-2 border-slate-200 rounded-xl focus:border-purple-500 focus:outline-none">
+          </div>
+          <div class="space-y-2">
+            <label class="text-sm font-semibold text-slate-600">单位</label>
+            <input type="text" id="new-field-unit" placeholder="元" class="input-field w-full px-4 border-2 border-slate-200 rounded-xl focus:border-purple-500 focus:outline-none">
+          </div>
+        </div>
+        <div class="flex items-center gap-2 p-3 bg-blue-50 rounded-xl">
+          <input type="checkbox" id="new-field-allow-multiple" class="w-5 h-5 accent-blue-500">
+          <label for="new-field-allow-multiple" class="text-sm text-slate-700">允许添加多个（像平台销售一样）</label>
+        </div>
+        <button onclick="confirmAddField()" class="w-full py-4 bg-gradient-to-r from-purple-500 to-purple-600 text-white rounded-xl font-semibold hover:from-purple-600 hover:to-purple-700 transition-all shadow-lg shadow-purple-200">
+          <i class="fas fa-check mr-2"></i>确认添加
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 编辑字段模态框 -->
+  <div id="edit-field-modal" class="modal">
+    <div class="modal-content">
+      <div class="p-6 border-b">
+        <div class="flex justify-between items-center">
+          <h3 class="text-xl font-bold text-slate-800"><i class="fas fa-edit text-blue-500 mr-2"></i>编辑字段</h3>
+          <button onclick="closeModal('edit-field-modal')" class="w-10 h-10 rounded-full hover:bg-slate-100 flex items-center justify-center transition-all">
+            <i class="fas fa-times text-slate-400"></i>
+          </button>
+        </div>
+      </div>
+      <div class="p-6 space-y-5">
+        <input type="hidden" id="edit-field-emp">
+        <input type="hidden" id="edit-field-iscustom">
+        <input type="hidden" id="edit-field-id">
+        <div class="space-y-2">
+          <label class="text-sm font-semibold text-slate-600">字段名称</label>
+          <input type="text" id="edit-field-name" class="input-field w-full px-4 border-2 border-slate-200 rounded-xl focus:border-blue-500 focus:outline-none">
+        </div>
+        <div class="space-y-2">
+          <label class="text-sm font-semibold text-slate-600">提成比例 (%)</label>
+          <input type="number" id="edit-field-rate" step="0.1" class="input-field w-full px-4 border-2 border-slate-200 rounded-xl focus:border-blue-500 focus:outline-none">
+          <p class="text-xs text-slate-400">输入0表示固定金额</p>
+        </div>
+        <button onclick="confirmEditField()" class="w-full py-4 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-xl font-semibold hover:from-blue-600 hover:to-blue-700 transition-all shadow-lg shadow-blue-200">
+          <i class="fas fa-save mr-2"></i>保存修改
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const STORAGE_KEY = 'salaryCalculator_v8_newlogic';
+    
+    // 员工专属的7款主题色，防止相邻卡片撞色
+    const cardThemes = [
+      { header: 'header-blue', bg: 'bg-blue-50', border: 'border-blue-200' },
+      { header: 'header-teal', bg: 'bg-teal-50', border: 'border-teal-200' },
+      { header: 'header-purple', bg: 'bg-purple-50', border: 'border-purple-200' },
+      { header: 'header-orange', bg: 'bg-orange-50', border: 'border-orange-200' },
+      { header: 'header-pink', bg: 'bg-pink-50', border: 'border-pink-200' },
+      { header: 'header-indigo', bg: 'bg-indigo-50', border: 'border-indigo-200' },
+      { header: 'header-yellow', bg: 'bg-amber-50', border: 'border-amber-200' }
+    ];
+
+    // 默认员工配置
+    const defaultEmployeeConfig = {
+      yanxun: { id: 'yanxun', name: '燕洵', position: '兼职客服', baseSalary: 3000, fixedPerformance: 0, fullAttendanceBonus: 0, mealAllowance: 0, monthlyRestDays: 0, hasOvertimePay: true, hasFullAttendance: false, subsidy: 0, fields: ['platformSales', 'offlineSales', 'otherCommission', 'actualRestDays'], platformCount: 1, offlineCount: 1, customFields: [] },
+      wenna: { id: 'wenna', name: '文娜', position: '坐班客服', baseSalary: 3500, fixedPerformance: 0, fullAttendanceBonus: 200, mealAllowance: 12, monthlyRestDays: 3, hasOvertimePay: true, hasFullAttendance: true, subsidy: 0, fields: ['platformSales', 'offlineSales', 'otherCommission', 'actualRestDays'], platformCount: 1, offlineCount: 1, customFields: [] },
+      danchun: { id: 'danchun', name: '丹纯', position: '运营', baseSalary: 3500, fixedPerformance: 800, fullAttendanceBonus: 200, mealAllowance: 12, monthlyRestDays: 4, hasOvertimePay: true, hasFullAttendance: true, subsidy: 0, fields: ['orderSales', 'storeRevenue', 'otherCommission', 'fixedPerformance', 'actualRestDays'], orderCount: 1, storeCount: 1, storeRate: 0.2, customFields: [] },
+      qiumin: { id: 'qiumin', name: '邱敏', position: '运营助理', baseSalary: 3500, fixedPerformance: 500, fullAttendanceBonus: 200, mealAllowance: 12, monthlyRestDays: 4, hasOvertimePay: true, hasFullAttendance: true, subsidy: 0, fields: ['orderSales', 'storeRevenue', 'otherCommission', 'fixedPerformance', 'actualRestDays'], orderCount: 1, storeCount: 1, storeRate: 0.2, customFields: [] },
+      wenyuan: { id: 'wenyuan', name: '仓库文员', position: '仓库文员', baseSalary: 3500, fixedPerformance: 300, fullAttendanceBonus: 200, mealAllowance: 12, monthlyRestDays: 2, hasOvertimePay: true, hasFullAttendance: true, subsidy: 0, fields: ['otherCommission', 'actualRestDays', 'fixedPerformance'], customFields: [] },
+      ayi: { id: 'ayi', name: '阿姨', position: '仓库打包A', baseSalary: 4000, fixedPerformance: 0, fullAttendanceBonus: 0, mealAllowance: 15, monthlyRestDays: 4, hasOvertimePay: true, hasFullAttendance: false, subsidy: 0, fields: ['otherCommission', 'actualRestDays'], customFields: [] },
+      ajie: { id: 'ajie', name: '阿姐', position: '仓库打包B', baseSalary: 3500, fixedPerformance: 400, fullAttendanceBonus: 200, mealAllowance: 12, monthlyRestDays: 2, hasOvertimePay: true, hasFullAttendance: true, subsidy: 0, fields: ['otherCommission', 'actualRestDays', 'fixedPerformance'], customFields: [] }
+    };
+
+    let employeeConfig = JSON.parse(JSON.stringify(defaultEmployeeConfig));
+    let customEmployees = {};
+    let formData = {};
+    let partTimeData = { templateCount: 0, singleUploadCount: 0, fullTemplateCount: 0, aiImageCount: 0 };
+    let probationEmployees = [];
+    let params = { year: new Date().getFullYear(), month: '', daysInMonth: 0, holidayDays: 0 };
+
+    document.addEventListener('DOMContentLoaded', () => {
+      document.getElementById('year').value = params.year;
+      document.getElementById('month').value = params.month;
+      document.getElementById('daysInMonth').value = params.daysInMonth || '';
+      
+      ['year', 'month', 'holidayDays'].forEach(id => {
+        document.getElementById(id).addEventListener('change', updateParams);
+        document.getElementById(id).addEventListener('input', updateParams);
+      });
+      
+      ['parttime-template', 'parttime-single', 'parttime-full', 'parttime-ai'].forEach(id => {
+        document.getElementById(id).addEventListener('input', updatePieceworkTotal);
+      });
+      
+      const dropArea = document.getElementById('drop-area');
+      dropArea.addEventListener('dragover', (e) => { e.preventDefault(); dropArea.classList.add('dragover'); });
+      dropArea.addEventListener('dragleave', () => dropArea.classList.remove('dragover'));
+      dropArea.addEventListener('drop', (e) => { e.preventDefault(); dropArea.classList.remove('dragover'); const file = e.dataTransfer.files[0]; if (file) handleFile(file); });
+      
+      renderEmployeeCards();
+      loadFromLocal();
+    });
+
+    // 存图功能：使用 html2canvas 将卡片生成图片并下载
+    async function saveCardAsImage(cardId, defaultName) {
+      const card = document.getElementById(cardId) || document.querySelector(`.employee-card[data-emp-card="${cardId}"]`);
+      if (!card) return;
+      
+      let empName = defaultName;
+      if (!empName) {
+        const nameInput = card.querySelector('.editable-name');
+        empName = nameInput ? nameInput.value : '员工';
+      }
+      
+      const year = document.getElementById('year').value || new Date().getFullYear();
+      const month = document.getElementById('month').value || (new Date().getMonth() + 1);
+      const filename = `${year}年${month}月_${empName}_薪资明细.png`;
+
+      try {
+        const canvas = await html2canvas(card, {
+          scale: 2, // 提高清晰度适配手机端
+          useCORS: true,
+          backgroundColor: '#ffffff' // 强制白色背景避免透明发黑
+        });
+
+        const imgData = canvas.toDataURL('image/png');
+        const link = document.createElement('a');
+        link.href = imgData;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      } catch (error) {
+        console.error('保存图片失败:', error);
+        alert('保存图片失败，请稍后重试');
+      }
+    }
+
+    function getDaysInMonth(year, month) {
+      return new Date(year, month, 0).getDate();
+    }
+
+    // 辅助函数：根据总天数全局同步休息和出勤天数
+    function syncRestAndWorkDays() {
+      if (params.daysInMonth > 0) {
+        Object.keys(formData).forEach(empKey => {
+           // 智能识别用户最近主动录入的是哪一项，以此为基准进行推导，防止互相覆盖
+           const primary = formData[empKey].primaryAttendanceField || 'actualRestDays';
+           
+           if (primary === 'actualWorkDays' && formData[empKey].actualWorkDays !== undefined) {
+               formData[empKey].actualRestDays = Math.max(0, params.daysInMonth - formData[empKey].actualWorkDays);
+           } else if (primary === 'actualRestDays' && formData[empKey].actualRestDays !== undefined) {
+               formData[empKey].actualWorkDays = Math.max(0, params.daysInMonth - formData[empKey].actualRestDays);
+           } else if (formData[empKey].actualRestDays !== undefined) {
+               formData[empKey].actualWorkDays = Math.max(0, params.daysInMonth - formData[empKey].actualRestDays);
+           } else if (formData[empKey].actualWorkDays !== undefined) {
+               formData[empKey].actualRestDays = Math.max(0, params.daysInMonth - formData[empKey].actualWorkDays);
+           }
+        });
+      }
+    }
+
+    function updateParams() {
+      params.year = parseInt(document.getElementById('year').value) || params.year;
+      const m = parseInt(document.getElementById('month').value);
+      params.month = isNaN(m) ? '' : m;
+      params.holidayDays = parseInt(document.getElementById('holidayDays').value) || 0;
+      
+      if (params.month) {
+        params.daysInMonth = getDaysInMonth(params.year, params.month);
+        document.getElementById('daysInMonth').value = params.daysInMonth;
+      } else {
+        params.daysInMonth = 0;
+        document.getElementById('daysInMonth').value = '';
+      }
+      
+      // 采用极速局部刷新，替代全量重绘，解决需要点击且焦点丢失的问题
+      saveFormDataState();
+      syncRestAndWorkDays();
+      restoreFormDataState();
+      updateAllCardResults();
+      
+      if (!document.getElementById('content-result').classList.contains('hidden')) renderResults();
+      if (!document.getElementById('content-summary').classList.contains('hidden')) renderSummary();
+    }
+
+    function updatePieceworkTotal() {
+      const template = parseInt(document.getElementById('parttime-template').value) || 0;
+      const single = parseInt(document.getElementById('parttime-single').value) || 0;
+      const full = parseInt(document.getElementById('parttime-full').value) || 0;
+      const ai = parseInt(document.getElementById('parttime-ai').value) || 0;
+      partTimeData = { templateCount: template, singleUploadCount: single, fullTemplateCount: full, aiImageCount: ai };
+      document.getElementById('piecework-total').textContent = (template * 10 + single * 2 + full * 12 + ai * 15).toFixed(2);
+    }
+
+    function renderEmployeeCards() {
+      let globalIndex = 0;
+      const container = document.getElementById('employee-cards');
+      container.innerHTML = Object.keys(employeeConfig).map(key => renderSingleCard(key, employeeConfig[key], false, globalIndex++)).join('');
+      
+      const customContainer = document.getElementById('custom-employee-cards');
+      customContainer.innerHTML = Object.keys(customEmployees).map(key => renderSingleCard(key, customEmployees[key], true, globalIndex++)).join('');
+      
+      bindInputEvents();
+      updateAllCardResults();
+    }
+
+    function renderSingleCard(key, config, isCustom, index) {
+      const theme = cardThemes[index % cardThemes.length];
+      
+      const hasPlatform = config.fields.includes('platformSales');
+      const hasOffline = config.fields.includes('offlineSales');
+      const hasOrder = config.fields.includes('orderSales');
+      const hasStore = config.fields.includes('storeRevenue');
+      const hasOther = config.fields.includes('otherCommission');
+      const hasPerformance = config.fields.includes('fixedPerformance');
+      const hasRest = config.fields.includes('actualRestDays');
+      const hasOvertime = config.fields.includes('overtimeHours');
+      
+      let platformInputs = '';
+      if (hasPlatform) {
+        platformInputs = Array(config.platformCount || 1).fill(0).map((_, i) => `
+          <div class="relative custom-field-box">
+            <input type="number" data-emp="${key}" data-field="platformSales_${i}" placeholder="0" class="input-green input-field w-full px-4 rounded-xl pr-24">
+            <span class="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 text-sm pl-2 bg-white/50 backdrop-blur-sm rounded">平台${i + 1}</span>
+            <div class="field-actions">
+              ${i > 0 ? `<button onclick="removeDynamicInput('${key}', 'platform', ${i}, ${isCustom})" class="field-action-btn delete" title="删除此输入框"><i class="fas fa-trash"></i></button>` : ''}
+            </div>
+          </div>
+        `).join('');
+      }
+      
+      let offlineInputs = '';
+      if (hasOffline) {
+        offlineInputs = Array(config.offlineCount || 1).fill(0).map((_, i) => `
+          <div class="relative custom-field-box">
+            <input type="number" data-emp="${key}" data-field="offlineSales_${i}" placeholder="0" class="input-green input-field w-full px-4 rounded-xl pr-24">
+            <span class="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 text-sm pl-2 bg-white/50 backdrop-blur-sm rounded">渠道${i + 1}</span>
+            <div class="field-actions">
+              ${i > 0 ? `<button onclick="removeDynamicInput('${key}', 'offline', ${i}, ${isCustom})" class="field-action-btn delete" title="删除此输入框"><i class="fas fa-trash"></i></button>` : ''}
+            </div>
+          </div>
+        `).join('');
+      }
+      
+      let orderInputs = '';
+      if (hasOrder) {
+        orderInputs = Array(config.orderCount || 1).fill(0).map((_, i) => `
+          <div class="relative custom-field-box">
+            <input type="number" data-emp="${key}" data-field="orderSales_${i}" placeholder="0" class="input-green input-field w-full px-4 rounded-xl pr-24">
+            <span class="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 text-sm pl-2 bg-white/50 backdrop-blur-sm rounded">跟单${i + 1}</span>
+            <div class="field-actions">
+              ${i > 0 ? `<button onclick="removeDynamicInput('${key}', 'order', ${i}, ${isCustom})" class="field-action-btn delete" title="删除此输入框"><i class="fas fa-trash"></i></button>` : ''}
+            </div>
+          </div>
+        `).join('');
+      }
+      
+      let storeInputs = '';
+      if (hasStore) {
+        const storeCount = config.storeCount || 1;
+        const storeRate = config.storeRate !== undefined ? config.storeRate : 0.2;
+        const inputsHtml = Array(storeCount).fill(0).map((_, i) => `
+          <div class="relative custom-field-box">
+            <input type="number" data-emp="${key}" data-field="storeRevenue_${i}" placeholder="0" class="input-orange input-field w-full px-4 rounded-xl pr-24">
+            <span class="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 text-sm pl-2 bg-white/50 backdrop-blur-sm rounded">店铺${i + 1}</span>
+            <div class="field-actions">
+              ${i === 0 ? `<button onclick="editStoreFieldName('${key}', ${isCustom})" class="field-action-btn edit" title="修改字段名"><i class="fas fa-pen"></i></button>` : ''}
+              ${i > 0 ? `<button onclick="removeDynamicInput('${key}', 'store', ${i}, ${isCustom})" class="field-action-btn delete" title="删除此输入框"><i class="fas fa-trash"></i></button>` : ''}
+            </div>
+          </div>
+        `).join('');
+        
+        storeInputs = `
+          <div class="space-y-2">
+            <label class="field-label field-label-store block px-4 py-3 rounded-t-xl text-slate-800 flex items-center justify-between">
+              <span id="store-label-${key}">${config.storeFieldName || '店铺营业额'}</span>
+              <div class="flex items-center gap-2">
+                <span class="rate-input-wrapper">
+                  <input type="number" class="rate-input" value="${storeRate}" onchange="updateStoreRate('${key}', this.value, ${isCustom})" step="0.1">%
+                </span>
+              </div>
+            </label>
+            <div class="space-y-2">${inputsHtml}</div>
+          </div>
+        `;
+      }
+      
+      let customFieldsHtml = '';
+      if (config.customFields && config.customFields.length > 0) {
+        customFieldsHtml = config.customFields.map((field) => {
+          const inputs = Array(field.count || 1).fill(0).map((_, i) => `
+            <div class="relative custom-field-box">
+              <input type="number" data-emp="${key}" data-field="custom_${field.id}_${i}" placeholder="0" class="input-blue input-field w-full px-4 rounded-xl pr-20">
+              <span class="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 text-sm pl-2 bg-white/50 backdrop-blur-sm rounded">${field.unit || '元'}</span>
+              <div class="field-actions">
+                ${i > 0 ? `<button onclick="removeCustomFieldInstance('${key}', '${field.id}', ${i}, ${isCustom})" class="field-action-btn delete" title="删除此输入框"><i class="fas fa-trash"></i></button>` : ''}
+              </div>
+            </div>
+          `).join('');
+          
+          return `
+            <div class="space-y-2">
+              <label class="field-label field-label-custom block px-4 py-3 rounded-t-xl text-slate-800 flex items-center justify-between">
+                <span>${field.name}</span>
+                <div class="flex items-center gap-2">
+                  ${field.rate > 0 ? `<span class="rate-input-wrapper"><input type="number" class="rate-input" value="${field.rate}" onchange="updateCustomFieldRate('${key}', '${field.id}', this.value, ${isCustom})" step="0.1">%</span>` : '<span class="text-xs">固定金额</span>'}
+                  <button onclick="editCustomField('${key}', '${field.id}', ${isCustom})" class="field-action-btn edit" title="编辑名称/比例"><i class="fas fa-pen"></i></button>
+                  <button onclick="deleteCustomField('${key}', '${field.id}', ${isCustom})" class="field-action-btn delete" title="删除此项设定"><i class="fas fa-trash"></i></button>
+                  ${field.allowMultiple ? `<button onclick="addCustomFieldInstance('${key}', '${field.id}', ${isCustom})" class="field-action-btn add" title="增加一个输入框"><i class="fas fa-plus"></i></button>` : ''}
+                </div>
+              </label>
+              <div class="space-y-2">${inputs}</div>
+            </div>
+          `;
+        }).join('');
+      }
+      
+      return `
+        <div class="employee-card ${theme.bg} border-2 ${theme.border} ${isCustom ? 'custom-emp-card' : ''}" data-emp-card="${key}">
+          <div class="${theme.header} text-white p-4 flex flex-col xl:flex-row items-start xl:items-center justify-between gap-4">
+            <div class="flex items-center gap-4 flex-wrap">
+              <input type="text" value="${config.name}" onchange="updateEmployeeName('${key}', this.value, ${isCustom})" class="editable-name" title="点击修改姓名">
+              <span class="px-3 py-1 bg-white/20 rounded-lg text-sm">${config.position}</span>
+              <span class="text-white/70 text-sm flex items-center gap-1">
+                配置月休: <input type="number" value="${config.monthlyRestDays}" onchange="updateEmployeeRest('${key}', this.value, ${isCustom})" class="editable-rest" title="更改默认月休"> 天
+              </span>
+              <span class="text-white/70 text-sm flex items-center gap-1">
+                餐补: <input type="number" value="${config.mealAllowance}" onchange="updateEmployeeMeal('${key}', this.value, ${isCustom})" class="editable-meal" title="点击修改餐补"> 元/出勤天
+              </span>
+            </div>
+            <div class="flex items-center gap-2 flex-wrap xl:justify-end">
+              <button onclick="saveCardAsImage('${key}')" class="btn-compact btn-cyan" title="保存该员工工资卡片为图片"><i class="fas fa-camera"></i>存图</button>
+              ${hasPlatform ? `<button onclick="addPlatformInput('${key}', ${isCustom})" class="btn-compact btn-green" title="增加一个平台输入框"><i class="fas fa-plus"></i>添平台</button>` : ''}
+              ${hasOffline ? `<button onclick="addOfflineInput('${key}', ${isCustom})" class="btn-compact btn-teal" title="增加一个渠道输入框"><i class="fas fa-plus"></i>添渠道</button>` : ''}
+              ${hasOrder ? `<button onclick="addOrderInput('${key}', ${isCustom})" class="btn-compact btn-blue" title="增加一个跟单输入框"><i class="fas fa-plus"></i>添跟单</button>` : ''}
+              ${hasStore ? `<button onclick="addStoreInput('${key}', ${isCustom})" class="btn-compact btn-pink" title="增加一个店铺输入框"><i class="fas fa-store"></i>添店铺</button>` : ''}
+              ${!hasOvertime ? `<button onclick="addOvertimeInput('${key}', ${isCustom})" class="btn-compact btn-amber" title="添加加班时长模块"><i class="fas fa-clock"></i>加班时</button>` : ''}
+              <button onclick="showAddFieldModal('${key}', ${isCustom})" class="btn-compact btn-purple" title="设定一种新的提成类型"><i class="fas fa-plus"></i>自定义</button>
+              ${isCustom ? `<button onclick="deleteCustomEmployee('${key}')" class="btn-compact btn-red" title="删除该员工"><i class="fas fa-trash"></i>删除</button>` : ''}
+            </div>
+          </div>
+          
+          <div class="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5 flex-grow">
+            ${hasPlatform ? `
+              <div class="space-y-2">
+                <label class="field-label block px-4 py-3 rounded-t-xl text-slate-800 flex items-center justify-between">
+                  <span>平台客服净销售额</span>
+                  <span class="text-xs text-slate-500">提成1%</span>
+                </label>
+                <div class="space-y-2">${platformInputs}</div>
+              </div>
+            ` : ''}
+            ${hasOffline ? `
+              <div class="space-y-2">
+                <label class="field-label block px-4 py-3 rounded-t-xl text-slate-800 flex items-center justify-between">
+                  <span>线下订单销售额</span>
+                  <span class="text-xs text-slate-500">提成1%</span>
+                </label>
+                <div class="space-y-2">${offlineInputs}</div>
+              </div>
+            ` : ''}
+            ${hasOrder ? `
+              <div class="space-y-2">
+                <label class="field-label block px-4 py-3 rounded-t-xl text-slate-800 flex items-center justify-between">
+                  <span>跟单销售额</span>
+                  <span class="text-xs text-slate-500">提成1%</span>
+                </label>
+                <div class="space-y-2">${orderInputs}</div>
+              </div>
+            ` : ''}
+            ${hasStore ? storeInputs : ''}
+            ${hasOther ? `
+              <div class="space-y-2">
+                <label class="field-label block px-4 py-3 rounded-t-xl text-slate-800">其他提成</label>
+                <input type="number" data-emp="${key}" data-field="otherCommission" placeholder="0" class="input-green input-field w-full px-4 rounded-xl">
+              </div>
+            ` : ''}
+            ${hasPerformance ? `
+              <div class="space-y-2">
+                <label class="field-label block px-4 py-3 rounded-t-xl text-slate-800" title="参与计算日薪的基础">本月实际绩效</label>
+                <input type="number" data-emp="${key}" data-field="fixedPerformance" value="${config.fixedPerformance}" class="input-green input-field w-full px-4 rounded-xl">
+              </div>
+            ` : ''}
+            <div class="space-y-2">
+              <label class="field-label block px-4 py-3 rounded-t-xl text-slate-800">补贴金额</label>
+              <input type="number" data-emp="${key}" data-field="subsidy" value="${config.subsidy}" class="input-green input-field w-full px-4 rounded-xl">
+            </div>
+            ${hasRest ? `
+              <div class="space-y-2">
+                <label class="field-label block px-4 py-3 rounded-t-xl text-slate-800" title="与实际出勤联动">实际休息天数</label>
+                <input type="number" data-emp="${key}" data-field="actualRestDays" placeholder="留空按0天" class="input-green input-field w-full px-4 rounded-xl text-sm" title="若未填写则按休息0天计算">
+              </div>
+              <div class="space-y-2">
+                <label class="field-label block px-4 py-3 rounded-t-xl text-slate-800" title="与实际休息联动">实际出勤天数</label>
+                <input type="number" data-emp="${key}" data-field="actualWorkDays" placeholder="留空按满勤" class="input-green input-field w-full px-4 rounded-xl text-sm" title="若未填写则按全月满勤计算">
+              </div>
+            ` : ''}
+            ${hasOvertime ? `
+              <div class="space-y-2">
+                <label class="field-label block px-4 py-3 rounded-t-xl text-slate-800 flex items-center justify-between" title="按日薪÷8计算时薪">
+                  <span>加班时长(小时)</span>
+                  <span class="text-xs text-amber-600">时薪: ¥<span id="hourly-sal-detail-${key}">0.00</span></span>
+                </label>
+                <div class="relative custom-field-box">
+                  <input type="number" data-emp="${key}" data-field="overtimeHours" placeholder="0" class="input-orange input-field w-full px-4 rounded-xl text-sm pr-10" title="录入额外的加班小时数">
+                  <div class="field-actions" style="display: flex;">
+                    <button onclick="removeOvertimeInput('${key}', ${isCustom})" class="field-action-btn delete" title="移除加班模块"><i class="fas fa-trash"></i></button>
+                  </div>
+                </div>
+              </div>
+            ` : ''}
+            ${customFieldsHtml}
+          </div>
+
+          <!-- 详细明细实时计算看板 -->
+          <div class="p-4 mt-auto border-t-2 ${theme.border} bg-white/60 backdrop-blur-sm">
+            <div class="flex justify-between items-center mb-3">
+              <h4 class="text-sm font-bold text-slate-700 flex items-center gap-2">
+                <i class="fas fa-file-invoice-dollar text-blue-500"></i> 实时薪资看板
+              </h4>
+              <div class="text-xs font-mono text-slate-500 bg-white px-2 py-1 rounded border shadow-sm">
+                核算日薪: ¥<span id="daily-salary-${key}">0.00</span>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+              <!-- 基础折算明细 -->
+              <div class="bg-white p-2.5 rounded-lg border border-slate-200 shadow-sm flex flex-col h-full">
+                <div class="text-slate-500 text-xs mb-1.5 border-b border-slate-100 pb-1.5 flex justify-between items-center">
+                  <span>基础薪资折算</span>
+                  <span class="bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded text-[10px]">实勤<span id="act-work-${key}">0</span>天</span>
+                </div>
+                <div class="flex-1 text-[11px] text-slate-600 space-y-1 mb-2">
+                  <div class="flex justify-between"><span>基数(底薪+绩效):</span> <span class="font-medium text-slate-700">¥<span id="base-perf-base-${key}">0.00</span></span></div>
+                  <div class="flex justify-between text-blue-600"><span>日薪(基数÷标准出勤):</span> <span>¥<span id="daily-sal-detail-${key}">0.00</span></span></div>
+                  <div class="flex justify-between text-green-600"><span>应满勤天数:</span> <span><span id="exp-work-detail-${key}">0</span>天</span></div>
+                  <div class="flex justify-between font-medium" id="act-work-container-${key}"><span>实际出勤天数:</span> <span><span id="act-work-detail-${key}">0</span>天</span></div>
+                  <div id="holiday-pay-detail-${key}"></div>
+                  <div id="attendance-diff-detail-${key}"></div>
+                </div>
+                <div class="pt-1.5 border-t border-slate-100 mt-auto">
+                  <div class="text-[11px] calc-process-font text-right mb-1" id="base-calc-process-${key}">0天 × 0.00</div>
+                  <div class="flex justify-between items-end">
+                    <span class="text-xs text-slate-400">折算小计</span>
+                    <span class="font-semibold text-purple-600 text-sm">¥<span id="base-perf-sal-${key}">0.00</span></span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 提成明细 -->
+              <div class="bg-white p-2.5 rounded-lg border border-slate-200 shadow-sm flex flex-col h-full">
+                <div class="text-slate-500 text-xs mb-1.5 border-b border-slate-100 pb-1.5">各项提成明细</div>
+                <div class="flex-1 text-[11px] text-slate-600 space-y-1 mb-2 custom-scrollbar overflow-y-auto max-h-[100px]" id="comm-detail-list-${key}">
+                  <!-- JS动态插入 -->
+                </div>
+                <div class="pt-1.5 border-t border-slate-100 flex justify-between items-end mt-auto">
+                  <span class="text-xs text-slate-400">提成小计</span>
+                  <span class="font-semibold text-slate-800 text-sm">¥<span id="total-comm-${key}">0.00</span></span>
+                </div>
+              </div>
+
+              <!-- 其他明细 -->
+              <div class="bg-white p-2.5 rounded-lg border border-slate-200 shadow-sm flex flex-col h-full">
+                <div class="text-slate-500 text-xs mb-1.5 border-b border-slate-100 pb-1.5">其他项明细</div>
+                <div class="flex-1 text-[11px] text-slate-600 space-y-1 mb-2">
+                  <div class="flex justify-between"><span>全勤奖:</span> <span>¥<span id="att-detail-${key}">0.00</span></span></div>
+                  <div class="flex justify-between"><span>餐补合计:</span> <span>¥<span id="meal-detail-${key}">0.00</span></span></div>
+                  <div class="flex justify-between"><span>额外补贴:</span> <span>¥<span id="sub-detail-${key}">0.00</span></span></div>
+                </div>
+                <div class="pt-1.5 border-t border-slate-100 flex justify-between items-end mt-auto">
+                  <span class="text-xs text-slate-400">其他小计</span>
+                  <span class="font-semibold text-slate-800 text-sm">¥<span id="other-add-${key}">0.00</span></span>
+                </div>
+              </div>
+
+              <!-- 实发汇总 -->
+              <div class="bg-gradient-to-r from-blue-50 to-indigo-50 p-3 rounded-lg border border-blue-200 shadow-sm relative overflow-hidden flex flex-col justify-center h-full">
+                <div class="absolute right-0 top-0 bottom-0 w-8 bg-blue-100/40 flex items-center justify-center -skew-x-12 translate-x-2"></div>
+                <div class="text-blue-700 font-bold text-xs mb-2 relative z-10">本月应发/实发合计</div>
+                <div class="font-bold text-blue-700 text-2xl leading-none relative z-10 mt-1">¥<span id="net-sal-${key}">0.00</span></div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      `;
+    }
+
+    function bindInputEvents() {
+      document.querySelectorAll('input[data-emp]').forEach(input => {
+        input.addEventListener('input', handleInput);
+      });
+    }
+
+    function handleInput(e) {
+      const emp = e.target.dataset.emp;
+      const field = e.target.dataset.field;
+      const valStr = e.target.value.trim();
+      const value = valStr === '' ? undefined : (parseFloat(valStr) || 0);
+      
+      if (!formData[emp]) formData[emp] = {};
+      
+      if (value === undefined) {
+         delete formData[emp][field];
+      } else {
+         formData[emp][field] = value;
+      }
+
+      // 记录用户主动操作的字段，确保联动时优先级正确
+      if (field === 'actualRestDays' || field === 'actualWorkDays') {
+          formData[emp].primaryAttendanceField = field;
+      }
+
+      // --- 核心双向推导逻辑 ---
+      if (params.daysInMonth > 0) {
+          if (field === 'actualRestDays') {
+             const workInput = document.querySelector(`input[data-emp="${emp}"][data-field="actualWorkDays"]`);
+             if (value !== undefined) {
+                const workDays = Math.max(0, params.daysInMonth - value);
+                formData[emp]['actualWorkDays'] = workDays;
+                if (workInput) workInput.value = workDays;
+             } else {
+                delete formData[emp]['actualWorkDays'];
+                if (workInput) workInput.value = '';
+             }
+          } else if (field === 'actualWorkDays') {
+             const restInput = document.querySelector(`input[data-emp="${emp}"][data-field="actualRestDays"]`);
+             if (value !== undefined) {
+                const restDays = Math.max(0, params.daysInMonth - value);
+                formData[emp]['actualRestDays'] = restDays;
+                if (restInput) restInput.value = restDays;
+             } else {
+                delete formData[emp]['actualRestDays'];
+                if (restInput) restInput.value = '';
+             }
+          }
+      }
+
+      const isCustom = customEmployees[emp] !== undefined;
+      updateCardResult(emp, isCustom);
+    }
+
+    // 更新单个卡片的详细实时明细
+    function updateCardResult(empKey, isCustom) {
+      const res = calculateSalary(empKey, isCustom);
+      const el = (id) => document.getElementById(`${id}-${empKey}`);
+      if (!el('daily-salary')) return;
+
+      el('daily-salary').textContent = res.dailySalary.toFixed(2);
+      el('act-work').textContent = res.actualWorkDays;
+      
+      // 基础明细
+      el('base-perf-base').textContent = (res.baseSalary + res.fixedPerformance).toFixed(2);
+      el('daily-sal-detail').textContent = res.dailySalary.toFixed(2);
+      if (el('hourly-sal-detail')) el('hourly-sal-detail').textContent = res.hourlySalary.toFixed(2);
+      
+      if (el('exp-work-detail')) el('exp-work-detail').textContent = res.expectedWorkDays;
+      el('act-work-detail').textContent = res.actualWorkDays;
+      
+      // 控制实际出勤天数的颜色
+      const actWorkContainer = el('act-work-container');
+      if (actWorkContainer) {
+          if (res.actualWorkDays >= res.expectedWorkDays) {
+              actWorkContainer.className = 'flex justify-between font-medium text-green-600';
+          } else {
+              actWorkContainer.className = 'flex justify-between font-medium text-red-500';
+          }
+      }
+      
+      // 老节补贴展示
+      let holidayHtml = '';
+      if (res.applicableHolidayDays > 0) {
+          holidayHtml = `<div class="flex justify-between text-orange-500 mt-1 pt-1 border-t border-slate-100"><span>老节补贴(+${res.applicableHolidayDays}天):</span> <span class="font-semibold">+¥${res.holidayPay.toFixed(2)}</span></div>`;
+      }
+      el('holiday-pay-detail').innerHTML = holidayHtml;
+
+      // 出勤状态标注 & 加班费展示
+      let diffHtml = '';
+      let overtimeTextParts = [];
+      let totalOvertimePay = 0;
+      
+      if (res.overtimeDays > 0) {
+          overtimeTextParts.push(`+${res.overtimeDays}天`);
+          totalOvertimePay += res.overtimePay;
+      }
+      if (res.overtimeHours > 0) {
+          overtimeTextParts.push(`+${res.overtimeHours}时`);
+          totalOvertimePay += res.overtimeHoursPay;
+      }
+
+      if (overtimeTextParts.length > 0) {
+          diffHtml = `<div class="flex justify-between text-green-600 mt-1"><span>含加班费(${overtimeTextParts.join(', ')}):</span> <span class="font-semibold">+¥${totalOvertimePay.toFixed(2)}</span></div>`;
+      } else if (res.absentDays > 0) {
+          diffHtml = `<div class="flex justify-between text-red-500 mt-1"><span>状态: 未满勤(按实勤计薪)</span></div>`;
+      } else {
+          diffHtml = `<div class="flex justify-between text-slate-400 mt-1"><span>状态: 正常满勤</span></div>`;
+      }
+      el('attendance-diff-detail').innerHTML = diffHtml;
+
+      // 更新折算小计计算过程
+      let processStr = `${res.actualWorkDays}天 × ¥${res.dailySalary.toFixed(2)}`;
+      if (res.applicableHolidayDays > 0) {
+          processStr += ` + ¥${res.holidayPay.toFixed(2)}(老节)`;
+      }
+      if (res.overtimeHours > 0) {
+          processStr += ` + ${res.overtimeHours}时 × ¥${res.hourlySalary.toFixed(2)}`;
+      }
+      if (el('base-calc-process')) {
+          el('base-calc-process').textContent = processStr;
+      }
+
+      el('base-perf-sal').textContent = res.baseAndPerfSalary.toFixed(2);
+
+      // 提成明细 (动态拼装HTML)
+      let commHtml = '';
+      if (res.platformCommission !== 0) commHtml += `<div class="flex justify-between"><span>平台提成:</span> <span>¥${res.platformCommission.toFixed(2)}</span></div>`;
+      if (res.offlineCommission !== 0) commHtml += `<div class="flex justify-between"><span>线下提成:</span> <span>¥${res.offlineCommission.toFixed(2)}</span></div>`;
+      if (res.orderCommission !== 0) commHtml += `<div class="flex justify-between"><span>跟单提成:</span> <span>¥${res.orderCommission.toFixed(2)}</span></div>`;
+      if (res.storeCommission !== 0) commHtml += `<div class="flex justify-between"><span>店铺提成:</span> <span>¥${res.storeCommission.toFixed(2)}</span></div>`;
+      if (res.otherCommission !== 0) commHtml += `<div class="flex justify-between"><span>其他提成:</span> <span>¥${res.otherCommission.toFixed(2)}</span></div>`;
+      
+      // 附加自定义提成明细
+      if (res.customDetails && res.customDetails.length > 0) {
+        res.customDetails.forEach(c => {
+          commHtml += `<div class="flex justify-between text-blue-600"><span>${c.name}:</span> <span>¥${c.amount.toFixed(2)}</span></div>`;
+        });
+      }
+
+      // 如果没有任何提成，显示提示占位符
+      if (commHtml === '') commHtml = '<div class="text-slate-400 text-center py-2">暂无数据</div>';
+      
+      el('comm-detail-list').innerHTML = commHtml;
+      el('total-comm').textContent = res.totalCommission.toFixed(2);
+
+      // 其他明细
+      el('att-detail').textContent = res.fullAttendanceBonus.toFixed(2);
+      el('meal-detail').textContent = res.mealAllowance.toFixed(2);
+      el('sub-detail').textContent = res.subsidy.toFixed(2);
+      
+      const otherAdd = res.fullAttendanceBonus + res.mealAllowance + res.subsidy;
+      el('other-add').textContent = otherAdd.toFixed(2);
+      
+      // 最终合计
+      el('net-sal').textContent = res.netSalary.toFixed(2);
+    }
+
+    function updateAllCardResults() {
+      Object.keys(employeeConfig).forEach(k => updateCardResult(k, false));
+      Object.keys(customEmployees).forEach(k => updateCardResult(k, true));
+    }
+
+    function updateEmployeeName(key, newName, isCustom) {
+      if (isCustom) customEmployees[key].name = newName.trim() || customEmployees[key].name;
+      else employeeConfig[key].name = newName.trim() || employeeConfig[key].name;
+    }
+    function updateEmployeeRest(key, newRest, isCustom) {
+      const v = parseInt(newRest) || 0;
+      if (isCustom) customEmployees[key].monthlyRestDays = v;
+      else employeeConfig[key].monthlyRestDays = v;
+      updateCardResult(key, isCustom);
+    }
+    function updateEmployeeMeal(key, newMeal, isCustom) {
+      const v = parseFloat(newMeal) || 0;
+      if (isCustom) customEmployees[key].mealAllowance = v;
+      else employeeConfig[key].mealAllowance = v;
+      updateCardResult(key, isCustom);
+    }
+
+    function addPlatformInput(key, isCustom) { const c = isCustom ? customEmployees[key] : employeeConfig[key]; c.platformCount = (c.platformCount || 1) + 1; reRenderAndRestore(); }
+    function addOfflineInput(key, isCustom) { const c = isCustom ? customEmployees[key] : employeeConfig[key]; c.offlineCount = (c.offlineCount || 1) + 1; reRenderAndRestore(); }
+    function addOrderInput(key, isCustom) { const c = isCustom ? customEmployees[key] : employeeConfig[key]; c.orderCount = (c.orderCount || 1) + 1; reRenderAndRestore(); }
+    function addStoreInput(key, isCustom) { const c = isCustom ? customEmployees[key] : employeeConfig[key]; c.storeCount = (c.storeCount || 1) + 1; reRenderAndRestore(); }
+    function updateStoreRate(key, newRate, isCustom) { const c = isCustom ? customEmployees[key] : employeeConfig[key]; c.storeRate = parseFloat(newRate) || 0; updateCardResult(key, isCustom); }
+    function editStoreFieldName(key, isCustom) {
+      const config = isCustom ? customEmployees[key] : employeeConfig[key];
+      const newName = prompt('请输入新的字段名称：', config.storeFieldName || '店铺营业额');
+      if (newName !== null && newName.trim() !== '') { config.storeFieldName = newName.trim(); reRenderAndRestore(); }
+    }
+    
+    function addOvertimeInput(key, isCustom) { 
+      const c = isCustom ? customEmployees[key] : employeeConfig[key]; 
+      if (!c.fields.includes('overtimeHours')) {
+        c.fields.push('overtimeHours'); 
+        reRenderAndRestore(); 
+      }
+    }
+    function removeOvertimeInput(key, isCustom) {
+      if (!confirm('确定要移除加班时长模块吗？')) return;
+      const c = isCustom ? customEmployees[key] : employeeConfig[key];
+      c.fields = c.fields.filter(f => f !== 'overtimeHours');
+      if (formData[key] && formData[key]['overtimeHours'] !== undefined) {
+          delete formData[key]['overtimeHours'];
+      }
+      reRenderAndRestore();
+    }
+
+    function removeDynamicInput(key, type, index, isCustom) {
+      const config = isCustom ? customEmployees[key] : employeeConfig[key];
+      const countProp = type + 'Count';
+      const baseField = type === 'platform' ? 'platformSales' : 
+                        type === 'offline' ? 'offlineSales' : 
+                        type === 'order' ? 'orderSales' : 
+                        type === 'store' ? 'storeRevenue' : '';
+      
+      let currentCount = config[countProp] || 1;
+      if (currentCount <= 1 || index === 0) return; 
+      
+      if (formData[key]) {
+          for (let i = index; i < currentCount - 1; i++) {
+              if (formData[key][`${baseField}_${i + 1}`] !== undefined) {
+                  formData[key][`${baseField}_${i}`] = formData[key][`${baseField}_${i + 1}`];
+              } else {
+                  delete formData[key][`${baseField}_${i}`];
+              }
+          }
+          delete formData[key][`${baseField}_${currentCount - 1}`];
+      }
+      
+      config[countProp] = currentCount - 1;
+      reRenderAndRestore();
+    }
+
+    function removeCustomFieldInstance(key, fieldId, index, isCustom) {
+      const config = isCustom ? customEmployees[key] : employeeConfig[key];
+      const field = config.customFields.find(f => f.id === fieldId);
+      if (!field) return;
+      
+      let currentCount = field.count || 1;
+      if (currentCount <= 1 || index === 0) return;
+      
+      if (formData[key]) {
+          for (let i = index; i < currentCount - 1; i++) {
+              if (formData[key][`custom_${fieldId}_${i + 1}`] !== undefined) {
+                  formData[key][`custom_${fieldId}_${i}`] = formData[key][`custom_${fieldId}_${i + 1}`];
+              } else {
+                  delete formData[key][`custom_${fieldId}_${i}`];
+              }
+          }
+          delete formData[key][`custom_${fieldId}_${currentCount - 1}`];
+      }
+      
+      field.count = currentCount - 1;
+      reRenderAndRestore();
+    }
+
+    function showAddFieldModal(key, isCustom) {
+      document.getElementById('field-target-emp').value = key; document.getElementById('field-target-iscustom').value = isCustom;
+      document.getElementById('new-field-name').value = ''; document.getElementById('new-field-rate').value = '1.0';
+      document.getElementById('new-field-unitprice').value = ''; document.getElementById('new-field-unit').value = '元';
+      document.getElementById('new-field-allow-multiple').checked = false; document.getElementById('add-field-modal').classList.add('show');
+    }
+    function confirmAddField() {
+      const key = document.getElementById('field-target-emp').value; const isCustom = document.getElementById('field-target-iscustom').value === 'true';
+      const name = document.getElementById('new-field-name').value.trim(); const rate = parseFloat(document.getElementById('new-field-rate').value) || 0;
+      const unitPrice = parseFloat(document.getElementById('new-field-unitprice').value) || 0; const unit = document.getElementById('new-field-unit').value.trim() || '元';
+      const allowMultiple = document.getElementById('new-field-allow-multiple').checked;
+      if (!name) return alert('请输入字段名称！');
+      const config = isCustom ? customEmployees[key] : employeeConfig[key];
+      if (!config.customFields) config.customFields = [];
+      config.customFields.push({ id: 'cf_' + Date.now(), name, rate, unitPrice, unit, allowMultiple, count: 1 });
+      closeModal('add-field-modal'); reRenderAndRestore();
+    }
+    function editCustomField(key, fieldId, isCustom) {
+      const config = isCustom ? customEmployees[key] : employeeConfig[key];
+      const field = config.customFields.find(f => f.id === fieldId); if (!field) return;
+      document.getElementById('edit-field-emp').value = key; document.getElementById('edit-field-iscustom').value = isCustom; document.getElementById('edit-field-id').value = fieldId;
+      document.getElementById('edit-field-name').value = field.name; document.getElementById('edit-field-rate').value = field.rate;
+      document.getElementById('edit-field-modal').classList.add('show');
+    }
+    function confirmEditField() {
+      const key = document.getElementById('edit-field-emp').value; const isCustom = document.getElementById('edit-field-iscustom').value === 'true';
+      const fieldId = document.getElementById('edit-field-id').value; const name = document.getElementById('edit-field-name').value.trim();
+      const rate = parseFloat(document.getElementById('edit-field-rate').value) || 0;
+      const config = isCustom ? customEmployees[key] : employeeConfig[key];
+      const field = config.customFields.find(f => f.id === fieldId);
+      if (field) { field.name = name || field.name; field.rate = rate; }
+      closeModal('edit-field-modal'); reRenderAndRestore();
+    }
+    function deleteCustomField(key, fieldId, isCustom) {
+      if (!confirm('确定要删除这个提成设定吗？这会清空录入的所有相关数据。')) return;
+      const config = isCustom ? customEmployees[key] : employeeConfig[key];
+      config.customFields = config.customFields.filter(f => f.id !== fieldId);
+      if (formData[key]) { Object.keys(formData[key]).forEach(k => { if (k.startsWith(`custom_${fieldId}_`)) delete formData[key][k]; }); }
+      reRenderAndRestore();
+    }
+    function addCustomFieldInstance(key, fieldId, isCustom) {
+      const config = isCustom ? customEmployees[key] : employeeConfig[key];
+      const field = config.customFields.find(f => f.id === fieldId);
+      if (field) { field.count = (field.count || 1) + 1; reRenderAndRestore(); }
+    }
+    function updateCustomFieldRate(key, fieldId, newRate, isCustom) {
+      const config = isCustom ? customEmployees[key] : employeeConfig[key];
+      const field = config.customFields.find(f => f.id === fieldId);
+      if (field) { field.rate = parseFloat(newRate) || 0; updateCardResult(key, isCustom); }
+    }
+
+    function saveFormDataState() {
+      document.querySelectorAll('input[data-emp]').forEach(input => {
+        const emp = input.dataset.emp;
+        const field = input.dataset.field;
+        const valStr = input.value.trim();
+        if (valStr !== '') {
+            if (!formData[emp]) formData[emp] = {};
+            formData[emp][field] = parseFloat(valStr) || 0;
+        }
+      });
+    }
+
+    function restoreFormDataState() {
+      Object.keys(formData).forEach(empKey => {
+        Object.keys(formData[empKey]).forEach(field => {
+          const input = document.querySelector(`input[data-emp="${empKey}"][data-field="${field}"]`);
+          if (input && formData[empKey][field] !== undefined) {
+             input.value = formData[empKey][field];
+          }
+        });
+      });
+    }
+
+    function reRenderAndRestore() {
+      saveFormDataState();
+      renderEmployeeCards();
+      restoreFormDataState();
+      updateAllCardResults();
+    }
+
+    function showAddEmployeeModal() { document.getElementById('add-employee-modal').classList.add('show'); }
+    function addNewEmployee() {
+      const name = document.getElementById('new-emp-name').value.trim();
+      const position = document.getElementById('new-emp-position').value.trim();
+      if (!name) return alert('请输入员工姓名！');
+      
+      const fields = [];
+      ['platformSales', 'offlineSales', 'orderSales', 'storeRevenue', 'otherCommission', 'fixedPerformance', 'actualRestDays'].forEach(field => {
+        if (document.getElementById(`field-${field}`) && document.getElementById(`field-${field}`).checked) fields.push(field);
+      });
+      
+      const empType = document.querySelector('input[name="empType"]:checked').value;
+      const id = `custom_${Date.now()}`;
+      
+      customEmployees[id] = {
+        id, name, position: position || (empType === 'yunying' ? '运营' : empType === 'wenyuan' ? '仓库文员' : '仓库打包'),
+        baseSalary: parseFloat(document.getElementById('new-emp-salary').value) || 3500,
+        fixedPerformance: parseFloat(document.getElementById('new-emp-performance').value) || 0,
+        fullAttendanceBonus: parseFloat(document.getElementById('new-emp-fullatt').value) || 200,
+        mealAllowance: parseFloat(document.getElementById('new-emp-meal').value) || 12,
+        monthlyRestDays: parseInt(document.getElementById('new-emp-rest').value) || 4,
+        hasOvertimePay: true, hasFullAttendance: document.getElementById('new-emp-fullatt-check').checked,
+        subsidy: parseFloat(document.getElementById('new-emp-subsidy').value) || 0,
+        fields,
+        platformCount: fields.includes('platformSales') ? 1 : 0, offlineCount: fields.includes('offlineSales') ? 1 : 0,
+        orderCount: fields.includes('orderSales') ? 1 : 0, storeCount: fields.includes('storeRevenue') ? 1 : 0,
+        storeRate: 0.2, customFields: []
+      };
+      
+      document.getElementById('new-emp-name').value = ''; document.getElementById('new-emp-position').value = '';
+      closeModal('add-employee-modal'); reRenderAndRestore(); alert('员工添加成功！');
+    }
+
+    function deleteCustomEmployee(key) {
+      if (confirm('确定要删除该员工吗？')) { delete customEmployees[key]; delete formData[key]; reRenderAndRestore(); }
+    }
+
+    function calculateSalary(empKey, isCustom) {
+      const config = isCustom ? customEmployees[empKey] : employeeConfig[empKey];
+      const data = formData[empKey] || {};
+      
+      const fixedPerformance = data.fixedPerformance !== undefined ? data.fixedPerformance : config.fixedPerformance;
+      const subsidy = data.subsidy !== undefined ? data.subsidy : config.subsidy;
+      
+      let actualRestDays = 0;
+      const primary = data.primaryAttendanceField || 'actualRestDays';
+      
+      if (primary === 'actualWorkDays' && data.actualWorkDays !== undefined && params.daysInMonth > 0) {
+          actualRestDays = Math.max(0, params.daysInMonth - data.actualWorkDays);
+      } else if (primary === 'actualRestDays' && data.actualRestDays !== undefined) {
+          actualRestDays = data.actualRestDays;
+      } else if (data.actualRestDays !== undefined) {
+          actualRestDays = data.actualRestDays;
+      } else if (data.actualWorkDays !== undefined && params.daysInMonth > 0) {
+          actualRestDays = Math.max(0, params.daysInMonth - data.actualWorkDays);
+      }
+      
+      const isPartTime = config.position.includes('兼职');
+      const applicableHolidayDays = isPartTime ? 0 : params.holidayDays;
+      
+      const standardWorkDays = Math.max(0, params.daysInMonth - config.monthlyRestDays);
+      const dailySalary = standardWorkDays > 0 ? (config.baseSalary + fixedPerformance) / standardWorkDays : 0;
+      
+      const expectedRestDays = config.monthlyRestDays + applicableHolidayDays;
+      const expectedWorkDays = Math.max(0, params.daysInMonth - expectedRestDays);
+      const actualWorkDays = Math.max(0, params.daysInMonth - actualRestDays);
+      
+      const diffDays = actualWorkDays - expectedWorkDays;
+      let overtimeDays = 0, overtimePay = 0;
+      let absentDays = 0, absentDeduction = 0;
+      
+      if (diffDays > 0) {
+          overtimeDays = diffDays;
+          overtimePay = diffDays * dailySalary;
+      } else if (diffDays < 0) {
+          absentDays = Math.abs(diffDays);
+          absentDeduction = absentDays * dailySalary;
+      }
+      
+      const workPay = dailySalary * actualWorkDays;
+      
+      const holidayPay = applicableHolidayDays * dailySalary;
+      
+      const overtimeHours = data.overtimeHours || 0;
+      const hourlySalary = dailySalary / 8;
+      const overtimeHoursPay = overtimeHours * hourlySalary;
+      
+      const baseAndPerfSalary = workPay + holidayPay + overtimeHoursPay;
+
+      const leaveDays = expectedWorkDays > actualWorkDays ? expectedWorkDays - actualWorkDays : 0;
+      const fullAttendanceBonus = (config.hasFullAttendance && leaveDays === 0) ? config.fullAttendanceBonus : 0;
+      
+      let platformSales = 0, offlineSales = 0, orderSales = 0, storeSales = 0;
+      Object.keys(data).forEach(k => { 
+        if (k.startsWith('platformSales_')) platformSales += data[k] || 0; 
+        if (k.startsWith('offlineSales_')) offlineSales += data[k] || 0; 
+        if (k.startsWith('orderSales_')) orderSales += data[k] || 0; 
+        if (k.startsWith('storeRevenue_')) storeSales += data[k] || 0; 
+      });
+      
+      const platformCommission = platformSales * 0.01;
+      const offlineCommission = offlineSales * 0.01;
+      const orderCommission = orderSales * 0.01;
+      const storeRate = config.storeRate !== undefined ? config.storeRate : 0.2;
+      const storeCommission = storeSales * (storeRate / 100);
+      const otherCommission = data.otherCommission || 0;
+      
+      let customCommission = 0;
+      let customDetails = []; 
+      if (config.customFields && config.customFields.length > 0) {
+        config.customFields.forEach(field => {
+          let fieldTotal = 0;
+          Object.keys(data).forEach(k => { if (k.startsWith(`custom_${field.id}_`)) fieldTotal += data[k] || 0; });
+          let fieldComm = field.rate > 0 ? fieldTotal * (field.rate / 100) : fieldTotal;
+          customCommission += fieldComm;
+          if (fieldComm !== 0) {
+            customDetails.push({ name: field.name, amount: fieldComm });
+          }
+        });
+      }
+      
+      const totalCommission = platformCommission + offlineCommission + orderCommission + storeCommission + otherCommission + customCommission;
+      
+      const mealAllowance = actualWorkDays * config.mealAllowance;
+      
+      const grossSalary = baseAndPerfSalary + fullAttendanceBonus + subsidy + totalCommission + mealAllowance;
+      
+      return {
+        name: config.name, position: config.position,
+        baseSalary: config.baseSalary, fixedPerformance,
+        expectedRestDays, actualRestDays, expectedWorkDays, actualWorkDays,
+        overtimeDays, overtimePay, absentDays, absentDeduction, applicableHolidayDays, holidayPay,
+        overtimeHours, hourlySalary, overtimeHoursPay,
+        dailySalary, baseAndPerfSalary,
+        platformCommission, offlineCommission, orderCommission, storeCommission, otherCommission, 
+        customCommission, customDetails, totalCommission,
+        subsidy, mealAllowance, fullAttendanceBonus,
+        grossSalary, netSalary: grossSalary 
+      };
+    }
+
+    function calculatePiecework() {
+      const total = (partTimeData.templateCount * 10) + (partTimeData.singleUploadCount * 2) + 
+                    (partTimeData.fullTemplateCount * 12) + (partTimeData.aiImageCount * 15);
+      return { name: '兼职套版', position: '计件', grossSalary: total, deduction: 0, netSalary: total };
+    }
+
+    function calculateProbation(emp) {
+      const expectedWorkDays = Math.max(1, params.daysInMonth - 4 - params.holidayDays);
+      const dailySalary = expectedWorkDays > 0 ? emp.baseSalary / expectedWorkDays : 0;
+      const basePay = dailySalary * emp.workDays;
+      const mealAllowance = emp.mealAllowancePerDay * emp.workDays;
+      return { name: emp.name, position: '试用期', grossSalary: basePay + mealAllowance, deduction: 0, netSalary: basePay + mealAllowance };
+    }
+
+    function addProbationEmployee() { probationEmployees.push({ id: Date.now(), name: '', baseSalary: 0, mealAllowancePerDay: 12, workDays: 0 }); renderProbationEmployees(); }
+    function removeProbationEmployee(id) { probationEmployees = probationEmployees.filter(e => e.id !== id); renderProbationEmployees(); }
+    function updateProbation(id, field, value) {
+      const emp = probationEmployees.find(e => e.id === id);
+      if (emp) emp[field] = field === 'name' ? value : (parseFloat(value) || 0);
+      if (!document.getElementById('content-summary').classList.contains('hidden')) renderSummary();
+    }
+    function renderProbationEmployees() {
+      const container = document.getElementById('probation-container');
+      if (probationEmployees.length === 0) { container.innerHTML = '<p class="text-slate-400 text-center py-8 text-lg">暂无试用期员工，点击右上角添加</p>'; return; }
+      container.innerHTML = probationEmployees.map(emp => `
+        <div class="grid grid-cols-2 md:grid-cols-5 gap-4 p-4 bg-gradient-to-r from-orange-50 to-amber-50 rounded-xl border border-orange-200 mb-3">
+          <div><label class="block text-xs font-semibold text-slate-600 mb-1">姓名</label><input type="text" placeholder="姓名" value="${emp.name}" onchange="updateProbation(${emp.id}, 'name', this.value)" class="input-field px-4 border-orange-200 focus:border-orange-500 rounded-xl w-full"></div>
+          <div><label class="block text-xs font-semibold text-slate-600 mb-1">底薪配置</label><input type="number" placeholder="底薪" value="${emp.baseSalary || ''}" onchange="updateProbation(${emp.id}, 'baseSalary', this.value)" class="input-field px-4 border-orange-200 focus:border-orange-500 rounded-xl w-full"></div>
+          <div><label class="block text-xs font-semibold text-slate-600 mb-1">餐补/天</label><input type="number" placeholder="餐补/天" value="${emp.mealAllowancePerDay || ''}" onchange="updateProbation(${emp.id}, 'mealAllowancePerDay', this.value)" class="input-field px-4 border-orange-200 focus:border-orange-500 rounded-xl w-full"></div>
+          <div><label class="block text-xs font-semibold text-slate-600 mb-1">实际出勤天数</label><input type="number" placeholder="上班天数" value="${emp.workDays || ''}" onchange="updateProbation(${emp.id}, 'workDays', this.value)" class="input-field px-4 border-orange-200 focus:border-orange-500 rounded-xl w-full"></div>
+          <div class="flex items-end"><button onclick="removeProbationEmployee(${emp.id})" class="w-full py-3 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-xl font-semibold hover:from-red-600 hover:to-red-700 transition-all"><i class="fas fa-trash"></i> 删除</button></div>
+        </div>
+      `).join('');
+    }
+
+    function renderResults() {
+      const tbody = document.getElementById('result-table-body');
+      let results = Object.keys(employeeConfig).map(key => calculateSalary(key, false));
+      Object.keys(customEmployees).forEach(key => results.push(calculateSalary(key, true)));
+      
+      tbody.innerHTML = results.map(r => `
+        <tr class="border-b border-slate-100 hover:bg-slate-50 transition-colors">
+          <td class="font-semibold text-slate-800 text-center">${r.name}</td>
+          <td class="text-center"><span class="px-2 py-1 bg-slate-100 rounded-lg text-xs font-medium">${r.position}</span></td>
+          <td class="text-right amount text-slate-500">¥${r.baseSalary.toLocaleString()}</td>
+          <td class="text-right amount text-slate-500">¥${r.fixedPerformance.toLocaleString()}</td>
+          <td class="text-right amount text-blue-600 font-medium bg-blue-50/50">¥${r.dailySalary.toFixed(2)}</td>
+          <td class="text-center"><span class="px-2 py-1 bg-indigo-50 text-indigo-700 rounded-md text-xs font-medium" title="实勤/应勤">${r.actualWorkDays} / ${r.expectedWorkDays}</span></td>
+          <td class="text-right amount text-purple-600 font-semibold bg-purple-50/50">¥${r.baseAndPerfSalary.toFixed(2)}</td>
+          <td>
+            <div class="detail-grid">
+              ${r.platformCommission > 0 ? `<span>平台</span><span>¥${r.platformCommission.toFixed(0)}</span>` : ''}
+              ${r.offlineCommission > 0 ? `<span>线下</span><span>¥${r.offlineCommission.toFixed(0)}</span>` : ''}
+              ${r.orderCommission > 0 ? `<span>跟单</span><span>¥${r.orderCommission.toFixed(0)}</span>` : ''}
+              ${r.storeCommission > 0 ? `<span>店铺</span><span>¥${r.storeCommission.toFixed(0)}</span>` : ''}
+              ${r.otherCommission > 0 ? `<span>其他</span><span>¥${r.otherCommission.toFixed(0)}</span>` : ''}
+              ${r.customDetails ? r.customDetails.map(c => `<span>${c.name}</span><span>¥${c.amount.toFixed(0)}</span>`).join('') : ''}
+              ${r.totalCommission === 0 ? '<span class="col-span-2 text-center text-slate-300">-</span>' : ''}
+            </div>
+          </td>
+          <td>
+             <div class="detail-grid">
+               <span>全勤</span><span>¥${r.fullAttendanceBonus}</span>
+               <span>餐补</span><span>¥${r.mealAllowance}</span>
+               <span>补贴</span><span>¥${r.subsidy}</span>
+             </div>
+          </td>
+          <td class="text-center amount amount-large text-green-600 font-bold bg-green-50/30">¥${r.netSalary.toFixed(2)}</td>
+        </tr>
+      `).join('');
+      
+      document.getElementById('result-title').textContent = `${params.year}年${params.month ? params.month + '月' : ''} 薪资明细单`;
+    }
+
+    function renderSummary() {
+      const tbody = document.getElementById('summary-table-body');
+      let summary = [];
+      Object.keys(employeeConfig).forEach(k => summary.push(calculateSalary(k, false)));
+      Object.keys(customEmployees).forEach(k => summary.push(calculateSalary(k, true)));
+      
+      let tableRows = summary.map(r => ({
+        name: r.name, position: r.position, 
+        basePart: r.baseAndPerfSalary, additionPart: r.totalCommission + r.fullAttendanceBonus + r.mealAllowance + r.subsidy,
+        netSalary: r.netSalary, note: `出勤${r.actualWorkDays}天`
+      }));
+      
+      const piecework = calculatePiecework();
+      if (piecework.grossSalary > 0) tableRows.push({ name: piecework.name, position: piecework.position, basePart: 0, additionPart: piecework.grossSalary, netSalary: piecework.netSalary, note: '计件' });
+      
+      probationEmployees.forEach(emp => {
+        if (emp.name && emp.workDays > 0) {
+          const r = calculateProbation(emp);
+          tableRows.push({ name: r.name, position: r.position, basePart: r.grossSalary - (emp.mealAllowancePerDay * emp.workDays), additionPart: emp.mealAllowancePerDay * emp.workDays, netSalary: r.netSalary, note: `试用出勤${emp.workDays}天` });
+        }
+      });
+      
+      tbody.innerHTML = tableRows.map(s => `
+        <tr class="border-b border-slate-100 hover:bg-slate-50 transition-colors">
+          <td class="p-4 font-semibold">${s.name}</td>
+          <td class="p-4"><span class="px-3 py-1.5 bg-slate-100 rounded-lg text-sm font-medium">${s.position}</span></td>
+          <td class="p-4 amount text-blue-600">¥${s.basePart.toFixed(2)}</td>
+          <td class="p-4 amount text-purple-600">¥${s.additionPart.toFixed(2)}</td>
+          <td class="p-4 amount text-lg text-green-600 font-bold">¥${s.netSalary.toFixed(2)}</td>
+          <td class="p-4 text-slate-400 text-sm">${s.note}</td>
+        </tr>
+      `).join('');
+      
+      document.getElementById('total-base').textContent = '¥' + tableRows.reduce((s, i) => s + i.basePart, 0).toFixed(2);
+      document.getElementById('total-addition').textContent = '¥' + tableRows.reduce((s, i) => s + i.additionPart, 0).toFixed(2);
+      document.getElementById('total-net').textContent = '¥' + tableRows.reduce((s, i) => s + i.netSalary, 0).toFixed(2);
+      document.getElementById('summary-title').textContent = `${params.year}年${params.month ? params.month + '月' : ''} 薪资汇总表`;
+    }
+
+    function switchTab(tab) {
+      ['input', 'result', 'summary'].forEach(t => {
+        const btn = document.getElementById(`tab-${t}`);
+        const content = document.getElementById(`content-${t}`);
+        if (t === tab) {
+          btn.className = 'flex-1 py-4 px-6 text-center font-semibold tab-active flex items-center justify-center gap-2 transition-all';
+          content.classList.remove('hidden');
+        } else {
+          btn.className = 'flex-1 py-4 px-6 text-center font-semibold text-slate-600 hover:bg-slate-100 flex items-center justify-center gap-2 transition-all';
+          content.classList.add('hidden');
+        }
+      });
+      if (tab === 'result') renderResults();
+      if (tab === 'summary') renderSummary();
+    }
+
+    function showImportModal() { document.getElementById('import-modal').classList.add('show'); }
+    function closeModal(id) { document.getElementById(id).classList.remove('show'); }
+    function handleFileImport(event) { const f = event.target.files[0]; if (f) handleFile(f); }
+    function handleFile(file) { const reader = new FileReader(); reader.onload = (e) => { document.getElementById('import-textarea').value = e.target.result; }; reader.readAsText(file); }
+
+    function processTextImport() {
+      const content = document.getElementById('import-textarea').value.trim();
+      if (!content) return;
+      const lines = content.split('\n'); if (lines.length < 2) return;
+      const headers = lines[0].split(',').map(h => h.trim());
+      
+      for (let i = 1; i < lines.length; i++) {
+        const values = lines[i].split(',').map(v => v.trim());
+        const nameIdx = headers.indexOf('员工姓名'); const name = nameIdx >= 0 ? values[nameIdx] : '';
+        const positionIdx = headers.indexOf('岗位'); const position = positionIdx >= 0 ? values[positionIdx] : '';
+        
+        let empKey = Object.keys(employeeConfig).find(k => employeeConfig[k].name === name);
+        let isCustom = false;
+        if (!empKey) { empKey = Object.keys(customEmployees).find(k => customEmployees[k].name === name); if (empKey) isCustom = true; }
+        if (!empKey && position) {
+          empKey = Object.keys(employeeConfig).find(k => employeeConfig[k].position === position);
+          if (!empKey) { empKey = Object.keys(customEmployees).find(k => customEmployees[k].position === position); if (empKey) isCustom = true; }
+        }
+        
+        if (empKey) {
+          const config = isCustom ? customEmployees[empKey] : employeeConfig[empKey];
+          if (nameIdx >= 0 && values[nameIdx]) config.name = values[nameIdx];
+          if (positionIdx >= 0 && values[positionIdx]) config.position = values[positionIdx];
+          const restIdx = headers.indexOf('配置月休'); if (restIdx >= 0 && values[restIdx]) config.monthlyRestDays = parseInt(values[restIdx]) || 0;
+          const mealIdx = headers.indexOf('餐补配置'); if (mealIdx >= 0 && values[mealIdx]) config.mealAllowance = parseFloat(values[mealIdx]) || 0;
+          const salaryIdx = headers.indexOf('底薪配置'); if (salaryIdx >= 0 && values[salaryIdx]) config.baseSalary = parseFloat(values[salaryIdx]) || 0;
+          
+          if (!formData[empKey]) formData[empKey] = {};
+          
+          const perfIdx = headers.indexOf('录入当月绩效'); if (perfIdx >= 0 && values[perfIdx]) formData[empKey]['fixedPerformance'] = parseFloat(values[perfIdx]) || 0;
+          const platformIdx = headers.indexOf('平台销售额'); if (platformIdx >= 0 && config.fields.includes('platformSales')) formData[empKey]['platformSales_0'] = parseFloat(values[platformIdx]) || 0;
+          const offlineIdx = headers.indexOf('线下销售额'); if (offlineIdx >= 0 && config.fields.includes('offlineSales')) formData[empKey]['offlineSales_0'] = parseFloat(values[offlineIdx]) || 0;
+          const orderIdx = headers.indexOf('跟单销售额'); if (orderIdx >= 0 && config.fields.includes('orderSales')) formData[empKey]['orderSales_0'] = parseFloat(values[orderIdx]) || 0;
+          const storeIdx = headers.indexOf('店铺营业额'); if (storeIdx >= 0 && config.fields.includes('storeRevenue')) formData[empKey]['storeRevenue_0'] = parseFloat(values[storeIdx]) || 0;
+          const otherIdx = headers.indexOf('其他提成'); if (otherIdx >= 0 && config.fields.includes('otherCommission')) formData[empKey]['otherCommission'] = parseFloat(values[otherIdx]) || 0;
+          const subsidyIdx = headers.indexOf('额外补贴'); if (subsidyIdx >= 0) formData[empKey]['subsidy'] = parseFloat(values[subsidyIdx]) || 0;
+          const restDaysIdx = headers.indexOf('实际休息天数'); if (restDaysIdx >= 0 && config.fields.includes('actualRestDays')) formData[empKey]['actualRestDays'] = parseFloat(values[restDaysIdx]) || 0;
+          const overtimeHoursIdx = headers.indexOf('加班时长(小时)'); 
+          if (overtimeHoursIdx >= 0) {
+              const otVal = parseFloat(values[overtimeHoursIdx]);
+              if (!isNaN(otVal)) {
+                  if (!config.fields.includes('overtimeHours')) config.fields.push('overtimeHours');
+                  formData[empKey]['overtimeHours'] = otVal;
+              }
+          }
+        }
+      }
+      
+      syncRestAndWorkDays();
+      reRenderAndRestore(); 
+      closeModal('import-modal'); 
+      alert('导入成功！');
+    }
+
+    function exportTemplate() {
+      const headers = ['员工姓名', '岗位', '底薪配置', '配置月休', '餐补配置', '录入当月绩效', '实际休息天数', '加班时长(小时)', '平台销售额', '线下销售额', '跟单销售额', '店铺营业额', '其他提成', '额外补贴'];
+      let rows = [];
+      const generateRow = (config) => {
+        const hasP = config.fields.includes('platformSales') ? '' : '-'; const hasO = config.fields.includes('offlineSales') ? '' : '-';
+        const hasR = config.fields.includes('orderSales') ? '' : '-'; const hasS = config.fields.includes('storeRevenue') ? '' : '-';
+        const hasOt = config.fields.includes('otherCommission') ? '' : '-'; 
+        const hasRe = config.fields.includes('actualRestDays') ? '' : '-';
+        const hasOh = config.fields.includes('overtimeHours') ? '' : '-';
+        return [config.name, config.position, config.baseSalary, config.monthlyRestDays, config.mealAllowance, config.fixedPerformance, hasRe, hasOh, hasP, hasO, hasR, hasS, hasOt, config.subsidy];
+      };
+      Object.keys(employeeConfig).forEach(k => rows.push(generateRow(employeeConfig[k])));
+      Object.keys(customEmployees).forEach(k => rows.push(generateRow(customEmployees[k])));
+      downloadCSV([headers.join(','), ...rows.map(r => r.join(','))].join('\n'), '批量导入数据模板.csv');
+    }
+
+    function exportResults() {
+      let results = [];
+      Object.keys(employeeConfig).forEach(k => results.push(calculateSalary(k, false)));
+      Object.keys(customEmployees).forEach(k => results.push(calculateSalary(k, true)));
+      const headers = ['员工姓名', '岗位', '底薪(设)', '绩效(录)', '日薪(算)', '出勤(实/应)', '基+绩折算', '各项提成', '餐补全勤补贴', '实发工资'];
+      const rows = results.map(r => [
+        r.name, r.position, r.baseSalary, r.fixedPerformance, r.dailySalary.toFixed(2), `${r.actualWorkDays}/${r.expectedWorkDays}`, 
+        r.baseAndPerfSalary.toFixed(2), r.totalCommission.toFixed(2), (r.mealAllowance+r.fullAttendanceBonus+r.subsidy).toFixed(2), r.netSalary.toFixed(2)
+      ]);
+      downloadCSV([headers.join(','), ...rows.map(r => r.join(','))].join('\n'), `${params.year}年${params.month ? params.month + '月' : ''}薪资明细.csv`);
+    }
+
+    function exportSummary() {
+      let results = [];
+      Object.keys(employeeConfig).forEach(k => results.push(calculateSalary(k, false)));
+      Object.keys(customEmployees).forEach(k => results.push(calculateSalary(k, true)));
+      const headers = ['员工姓名', '岗位', '应发基础', '提成及附加', '实发金额', '备注'];
+      let rows = results.map(r => [r.name, r.position, r.baseAndPerfSalary.toFixed(2), (r.totalCommission + r.fullAttendanceBonus + r.mealAllowance + r.subsidy).toFixed(2), r.netSalary.toFixed(2), `出勤${r.actualWorkDays}天`]);
+      const pw = calculatePiecework(); if (pw.grossSalary > 0) rows.push([pw.name, pw.position, 0, pw.grossSalary.toFixed(2), pw.netSalary.toFixed(2), '计件']);
+      probationEmployees.forEach(e => { if (e.name && e.workDays > 0) { const r = calculateProbation(e); rows.push([r.name, r.position, (r.grossSalary - e.mealAllowancePerDay*e.workDays).toFixed(2), (e.mealAllowancePerDay*e.workDays).toFixed(2), r.netSalary.toFixed(2), `试用出勤${e.workDays}天`]); }});
+      downloadCSV([headers.join(','), ...rows.map(r => r.join(','))].join('\n'), `${params.year}年${params.month ? params.month + '月' : ''}发放汇总.csv`);
+    }
+
+    function downloadCSV(content, filename) {
+      const blob = new Blob(['\ufeff' + content], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a'); link.href = URL.createObjectURL(blob); link.download = filename; link.click();
+    }
+
+    function saveToLocal() {
+      saveFormDataState();
+      const data = { employeeConfig, customEmployees, formData, partTimeData, probationEmployees, params };
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+      alert('数据已成功保存到浏览器本地缓存！下次打开会自动读取。');
+    }
+
+    function loadFromLocal() {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        const data = JSON.parse(saved);
+        if (data.employeeConfig) employeeConfig = data.employeeConfig;
+        if (data.customEmployees) customEmployees = data.customEmployees;
+        formData = data.formData || {};
+        partTimeData = data.partTimeData || { templateCount: 0, singleUploadCount: 0, fullTemplateCount: 0, aiImageCount: 0 };
+        probationEmployees = data.probationEmployees || [];
+        params = data.params || params;
+        
+        document.getElementById('year').value = params.year;
+        document.getElementById('month').value = params.month || '';
+        document.getElementById('holidayDays').value = params.holidayDays;
+        document.getElementById('daysInMonth').value = params.daysInMonth || '';
+        
+        syncRestAndWorkDays();
+        reRenderAndRestore();
+        
+        document.getElementById('parttime-template').value = partTimeData.templateCount || 0;
+        document.getElementById('parttime-single').value = partTimeData.singleUploadCount || 0;
+        document.getElementById('parttime-full').value = partTimeData.fullTemplateCount || 0;
+        document.getElementById('parttime-ai').value = partTimeData.aiImageCount || 0;
+        updatePieceworkTotal(); renderProbationEmployees();
+      }
+    }
+
+    function clearAll() {
+      if (confirm('确定要清空所有录入数据并恢复初始默认配置吗？')) {
+        formData = {}; customEmployees = {};
+        partTimeData = { templateCount: 0, singleUploadCount: 0, fullTemplateCount: 0, aiImageCount: 0 };
+        probationEmployees = [];
+        employeeConfig = JSON.parse(JSON.stringify(defaultEmployeeConfig));
+        document.querySelectorAll('input[type="number"]').forEach(input => { if (!input.disabled) input.value = ''; });
+        document.getElementById('piecework-total').textContent = '0.00';
+        reRenderAndRestore(); renderProbationEmployees();
+        localStorage.removeItem(STORAGE_KEY);
+      }
+    }
+  </script>
+</body>
+</html>
